@@ -7,5 +7,5 @@ build/
 .vscode/
 riscv-gnu-toolchain/
 .idea/
-starterKit/compile_commands.json
 starterKit/.cache/
+starterKit/config_machine.json
