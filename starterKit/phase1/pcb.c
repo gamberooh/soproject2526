@@ -31,7 +31,7 @@ pcb_t* allocPcb() {
   elem->p_s.mie = 0;
   elem->p_s.pc_epc = 0;
   elem->p_s.status = 0;
-  for (int i = 0; i < STATE_GPR_LEN-1; i++) {
+  for (int i = 0; i < STATE_GPR_LEN; i++) {
     elem->p_s.gpr[i] = 0;
   }
   elem->p_time = 0;
@@ -76,16 +76,14 @@ pcb_t* removeProcQ(struct list_head* head) {
 }
 
 pcb_t* outProcQ(struct list_head* head, pcb_t* p) {
-  struct list_head* iter = head; 
-  while(!list_is_last(iter, head)) {
+  struct list_head* iter;
+  list_for_each (iter, head) {
     if (p->p_pid == container_of(iter, pcb_t, p_list)->p_pid) { //match
       __list_del(iter->prev, iter->next);
       return p;
     }
-    iter = iter->next;
   }
   return NULL; //no match
-
 }
 
 int emptyChild(pcb_t* p) {
@@ -106,21 +104,13 @@ pcb_t* removeChild(pcb_t* p) {
   // rimuovo firstChild dalla testa -> la struttura si ricuce da sola
   list_del(firstChild);
   // preparp
-  pcb_t* elem = container_of(firstChild, pcb_t, p_list);
+  pcb_t* elem = container_of(firstChild, pcb_t, p_sib);
   elem->p_parent = NULL;
   return elem;
 }
 
 pcb_t* outChild(pcb_t* p) {
   if (p->p_parent == NULL) return NULL;
-  struct list_head* iter = &p->p_sib;
-  while (!list_is_last(iter, &p->p_sib)) {
-    if (p->p_pid == container_of(iter, pcb_t, p_sib)->p_pid) {
-      __list_del(iter->prev, iter->next);
-      p->p_parent = NULL;
-      return p;
-    }
-    iter = iter->next;
-  }
-  return NULL; //no match
+  list_del(&p->p_sib);
+  return p;
 }

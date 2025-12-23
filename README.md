@@ -3,6 +3,5 @@
  - Davide Gamberini
  - Riccardo Marchesini
  - Zeyad Ayad
- - Carlo Maria Lanzoni
 [Add new contents in the future]
 
