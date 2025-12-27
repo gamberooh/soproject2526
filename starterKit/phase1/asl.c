@@ -15,9 +15,7 @@ void initASL() {
 }
 
 int insertBlocked(int* semAdd, pcb_t* p) {
-    // itero sui semafori attivi per cercare un semaforo = semAdd
     struct list_head* iter;
-    // int i = 0;
     list_for_each(iter, &semd_h) {
         semd_t* actAdd = container_of(iter, semd_t, s_link);
         if (actAdd->s_key == semAdd) {
@@ -35,7 +33,8 @@ int insertBlocked(int* semAdd, pcb_t* p) {
     list_del(semdFree_h.next);
     newSem->s_key = semAdd;
     mkEmptyProcQ(&newSem->s_procq);
-    list_add(&newSem->s_link, &semd_h);
+    // Flusso dei semafori FIFO
+    list_add_tail(&newSem->s_link, &semd_h);
     p->p_semAdd = semAdd;
     insertProcQ(&newSem->s_procq, p);
     return FALSE;
@@ -48,7 +47,8 @@ pcb_t* removeBlocked(int* semAdd) {
             pcb_t* removed = removeProcQ(&container_of(iter, semd_t, s_link)->s_procq);
             if (emptyProcQ(&container_of(iter, semd_t, s_link)->s_procq)){
                 list_del(iter);
-                list_add(iter, &semdFree_h);
+                // Flusso dei semafori FIFO
+                list_add_tail(iter, &semdFree_h);
             }
             return removed;
         }
@@ -60,7 +60,13 @@ pcb_t* outBlocked(pcb_t* p) {
     struct list_head* iter; 
     list_for_each(iter, &semd_h) {
         if (container_of(iter, semd_t, s_link)->s_key == p->p_semAdd) {
-            return outProcQ(&container_of(iter, semd_t, s_link)->s_procq, p);
+            pcb_t* removed = outProcQ(&container_of(iter, semd_t, s_link)->s_procq, p);
+            // caso in cui p era unico nella coda dei bloccati
+            if (emptyProcQ(&container_of(iter, semd_t, s_link)->s_procq)){
+                list_del(iter);
+                list_add_tail(iter, &semdFree_h);
+            }
+            return removed;
         }
     }
     return NULL;
