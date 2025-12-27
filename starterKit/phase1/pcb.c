@@ -62,16 +62,16 @@ void insertProcQ(struct list_head* head, pcb_t* p) {
 }
 
 pcb_t* headProcQ(struct list_head* head) {
-  if (emptyProcQ(head)) return NULL;
-  pcb_t* tmp= container_of(head->next, pcb_t,p_list);
-  return tmp;
+  if (emptyProcQ(head)) 
+    return NULL;
+  else 
+    return container_of(head->next, pcb_t, p_list);
 }
 
 pcb_t* removeProcQ(struct list_head* head) {
   if (emptyProcQ(head)) return NULL;
-  struct list_head* first = head->next;
-  pcb_t* elem = container_of(first, pcb_t, p_list);
-  list_del(first);
+  pcb_t* elem = container_of(head->next, pcb_t, p_list);
+  list_del(head->next);
   return elem;
 }
 
