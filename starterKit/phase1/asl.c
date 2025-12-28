@@ -20,23 +20,22 @@ int insertBlocked(int* semAdd, pcb_t* p) {
         semd_t* actAdd = container_of(iter, semd_t, s_link);
         if (actAdd->s_key == semAdd) {
             p->p_semAdd = semAdd;
-            insertProcQ(&actAdd->s_procq, p);
+            //semafori FIFO
+            list_add_tail(&p->p_list, &actAdd->s_procq);
             return FALSE;
         }
     }
-    // se fallisce non è negli attivi quindi prende un nuovo descrittore di semaforo
-    // dalla semdFree_h e lo inserisce nella semd_h
+    // fallisce = non attivo -> nuovo descrittore di semaforo
+    // da semdFree_h e lo inserisce nella semd_h
     if (emptyProcQ(&semdFree_h)) return TRUE;
-    // estrai semaforo dalla lista dei liberi
-    // inizializzalo e inseriscilo nella lista dei semafori attivi
+    // estrai 1' semaforo libero
     semd_t* newSem = container_of(semdFree_h.next, semd_t, s_link);
     list_del(semdFree_h.next);
     newSem->s_key = semAdd;
     mkEmptyProcQ(&newSem->s_procq);
-    // Flusso dei semafori FIFO
-    list_add_tail(&newSem->s_link, &semd_h);
-    p->p_semAdd = semAdd;
-    insertProcQ(&newSem->s_procq, p);
+    p->p_semAdd = semAdd; //assegno il nuovo semAdd
+    list_add_tail(&p->p_list, &newSem->s_procq); //aggiungo sentinella p ai bloccati di newSem
+    list_add_tail(&newSem->s_link, &semd_h); // newSem aggiunto alla ASL
     return FALSE;
 }
 
@@ -46,8 +45,8 @@ pcb_t* removeBlocked(int* semAdd) {
         if (container_of(iter, semd_t, s_link)->s_key == semAdd) {
             pcb_t* removed = removeProcQ(&container_of(iter, semd_t, s_link)->s_procq);
             if (emptyProcQ(&container_of(iter, semd_t, s_link)->s_procq)){
+                container_of(iter, semd_t, s_link)->s_key = NULL; // elimino il suo semAdd
                 list_del(iter);
-                // Flusso dei semafori FIFO
                 list_add_tail(iter, &semdFree_h);
             }
             return removed;
@@ -63,6 +62,7 @@ pcb_t* outBlocked(pcb_t* p) {
             pcb_t* removed = outProcQ(&container_of(iter, semd_t, s_link)->s_procq, p);
             // caso in cui p era unico nella coda dei bloccati
             if (emptyProcQ(&container_of(iter, semd_t, s_link)->s_procq)){
+                container_of(iter, semd_t, s_link)->s_key = NULL;
                 list_del(iter);
                 list_add_tail(iter, &semdFree_h);
             }
