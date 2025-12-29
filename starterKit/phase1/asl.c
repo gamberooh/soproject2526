@@ -31,9 +31,9 @@ int insertBlocked(int* semAdd, pcb_t* p) {
     // estrai 1' semaforo libero
     semd_t* newSem = container_of(semdFree_h.next, semd_t, s_link);
     list_del(semdFree_h.next);
+    p->p_semAdd = semAdd; //assegno il nuovo semAdd
     newSem->s_key = semAdd;
     mkEmptyProcQ(&newSem->s_procq);
-    p->p_semAdd = semAdd; //assegno il nuovo semAdd
     list_add_tail(&p->p_list, &newSem->s_procq); //aggiungo sentinella p ai bloccati di newSem
     list_add_tail(&newSem->s_link, &semd_h); // newSem aggiunto alla ASL
     return FALSE;
@@ -44,8 +44,9 @@ pcb_t* removeBlocked(int* semAdd) {
     list_for_each(iter, &semd_h) {
         if (container_of(iter, semd_t, s_link)->s_key == semAdd) {
             pcb_t* removed = removeProcQ(&container_of(iter, semd_t, s_link)->s_procq);
+            removed->p_semAdd = NULL;
             if (emptyProcQ(&container_of(iter, semd_t, s_link)->s_procq)){
-                container_of(iter, semd_t, s_link)->s_key = NULL; // elimino il suo semAdd
+                container_of(iter, semd_t, s_link)->s_key = NULL;
                 list_del(iter);
                 list_add_tail(iter, &semdFree_h);
             }
@@ -60,6 +61,7 @@ pcb_t* outBlocked(pcb_t* p) {
     list_for_each(iter, &semd_h) {
         if (container_of(iter, semd_t, s_link)->s_key == p->p_semAdd) {
             pcb_t* removed = outProcQ(&container_of(iter, semd_t, s_link)->s_procq, p);
+            removed->p_semAdd = NULL;
             // caso in cui p era unico nella coda dei bloccati
             if (emptyProcQ(&container_of(iter, semd_t, s_link)->s_procq)){
                 container_of(iter, semd_t, s_link)->s_key = NULL;
