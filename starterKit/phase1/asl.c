@@ -7,8 +7,8 @@ static struct list_head semd_h; //sentinella dei semafori attivi
 
 
 void initASL() {
-    mkEmptyProcQ(&semdFree_h);
-    mkEmptyProcQ(&semd_h);
+    INIT_LIST_HEAD(&semdFree_h);
+    INIT_LIST_HEAD(&semd_h);
     for (int i = 0; i < MAXPROC; i++) {
         list_add(&semd_table[i].s_link, &semdFree_h);
     }

@@ -103,7 +103,7 @@ pcb_t* removeChild(pcb_t* p) {
   struct list_head* firstChild = p->p_child.next;
   // rimuovo firstChild dalla testa -> la struttura si ricuce da sola
   list_del(firstChild);
-  // preparp
+  // l'elemento rimosso avra' il campo parent = NULL
   pcb_t* elem = container_of(firstChild, pcb_t, p_sib);
   elem->p_parent = NULL;
   return elem;
