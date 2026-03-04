@@ -53,7 +53,7 @@ void insertProcQ(struct list_head* head, pcb_t* p) {
   list_for_each(iter, head){
     int act_prio = container_of(iter, pcb_t, p_list)->p_prio;
     if (p->p_prio > act_prio) {
-      __list_add(&p->p_list, iter->prev, iter);
+      list_add(&p->p_list, iter->prev);
       return;
     }
   }
@@ -79,7 +79,7 @@ pcb_t* outProcQ(struct list_head* head, pcb_t* p) {
   struct list_head* iter;
   list_for_each (iter, head) {
     if (p->p_pid == container_of(iter, pcb_t, p_list)->p_pid) { //match
-      __list_del(iter->prev, iter->next);
+      list_del(iter);
       return p;
     }
   }
@@ -110,7 +110,9 @@ pcb_t* removeChild(pcb_t* p) {
 }
 
 pcb_t* outChild(pcb_t* p) {
-  if (p->p_parent == NULL) return NULL;
+  if (p->p_parent == NULL) 
+    return NULL;
   list_del(&p->p_sib);
+  p->p_parent = NULL;
   return p;
 }
