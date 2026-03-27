@@ -1,5 +1,7 @@
 #include "../../phase1/headers/asl.h";
 #include "../../phase1/headers/pcb.h";
+#include "./interrupts.h";
+#include "./scheduler.h";
 #include <uriscv/types.h>
 
 // Global variables
