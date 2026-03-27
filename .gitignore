@@ -1,11 +1,11 @@
 CMakeLists.txt
-starterKit/CMakeLists.txt
-starterKit/compile_commands.json
-starterKit/build
-starterKit/term0.uriscv
+compile_commands.json
+build
+term0.uriscv
 build/
 .vscode/
 riscv-gnu-toolchain/
 .idea/
-starterKit/.cache/
-starterKit/config_machine.json
+.cache/
+config_machine.json
+consegna/
