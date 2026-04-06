@@ -7,5 +7,5 @@ build/
 riscv-gnu-toolchain/
 .idea/
 .cache/
-config_machine.json
 consegna/
+consegne/
