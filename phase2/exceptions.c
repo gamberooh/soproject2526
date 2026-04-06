@@ -67,7 +67,7 @@ void killProgeny(pcb_t* term) {
     if (term->p_semAdd != NULL) {
         // bloccato in attesa di un sem
         outBlocked(term);
-        // Ricerca sui semafori dei device, in caso decremento
+        // TODO: Ricerca sui semafori dei device, in caso decremento
         // soft_block_counter--;
     } else if (term != current_process) {
         // current_process e' il processo in esecuzione, essendo in un'arch
@@ -133,7 +133,7 @@ void NSYS3(state_t* excState) {
         // Istruzioni per SYSCALL bloccanti
         excState->pc_epc += 4;
         current_process->p_s = *excState;
-        // update accumulated CPU time for the Current Process
+        // TODO: update accumulated CPU time for the Current Process
 
         insertBlocked(semAdd, current_process);
         scheduler();
