@@ -132,8 +132,8 @@ void NSYS3(state_t* excState) {
     if (*semAdd <= 0) {
         // Istruzioni per SYSCALL bloccanti
         excState->pc_epc += 4;
-        current_process->p_s = *excState;
         // TODO: update accumulated CPU time for the Current Process
+        current_process->p_s = *excState;
 
         insertBlocked(semAdd, current_process);
         scheduler();
