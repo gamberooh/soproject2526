@@ -13,7 +13,7 @@ bool IS_FLASH(unsigned int id)
 
 bool IS_ETHERNET(unsigned int id)
 {
-    return id >= SEM_ETHERNET_0 && id <= SEM_ETHERNET_1;
+    return id >= SEM_ETHERNET_0 && id <= SEM_ETHERNET_7;
 }
 
 bool IS_PRINTER(unsigned int id)
