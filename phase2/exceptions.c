@@ -159,7 +159,7 @@ void NSYS3(state_t *excState)
     {
         // Istruzioni per SYSCALL bloccanti
         excState->pc_epc += 4;
-        // TODO: update accumulated CPU time for the Current Process
+        updateCPUTime();
         current_process->p_s = *excState;
 
         insertBlocked(semAdd, current_process);
@@ -187,7 +187,13 @@ void NSYS4(state_t *excState)
 }
 
 // DoIO
-void NSYS5(state_t *excState);
+void NSYS5(state_t *excState)
+{
+    // in reg_a1 è presente l'indice che punta al semaforo su cui current proc si blocca
+    int semIndex = (int)excState->reg_a1;
+    excState->reg_a1 = device_semaphores[semIndex];
+    NSYS3(excState);
+}
 
 // GetCPUTime
 void NSYS6(state_t *excState);
@@ -303,7 +309,7 @@ void exception_handler()
         passUpOrDie(GENERALEXCEPT);
         return;
     }
-    else if(excCause >= 24 && excCause <= 28) // 8.3
+    else if (excCause >= 24 && excCause <= 28) // 8.3
     {
         passUpOrDie(PGFAULTEXCEPT);
         return;
