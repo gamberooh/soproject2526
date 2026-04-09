@@ -21,7 +21,7 @@ void uTLB_RefillHandler()
 {
     // This code was provided in ./p2test.c
     // It has to be replaced in phase3
-    prid_t prid = getPRID();
+    int prid = getPRID();
     setENTRYHI(0x80000000);
     setENTRYLO(0x00000000);
     TLBWR();
@@ -279,7 +279,7 @@ void trap_exception_handler();
 void passUpOrDie(int except_index)
 {
     if (current_process->p_supportStruct == NULL)
-        NSYS2(current_process->p_s);
+        NSYS2(&current_process->p_s);
     else
     {
         state_t *bios_state = (state_t *)GET_EXCEPTION_STATE_PTR(0);
