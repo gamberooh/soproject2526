@@ -14,7 +14,7 @@ bool __CAUSE_IS_SYSCALL__(unsigned int causeCode)
 bool __CAUSE_IS_TRAP__(unsigned int causeCode)
 {
     return (
-        (causeCode <= EXC_IAM && EXC_SAF) || causeCode == EXC_ECS || causeCode == 10 || (causeCode <= EXC_IPF && causeCode >= 23));
+        (causeCode <= EXC_IAM && causeCode >= EXC_SAF) || causeCode == EXC_ECS || causeCode == 10 || (causeCode <= EXC_IPF && causeCode >= 23));
 }
 
 void uTLB_RefillHandler()
@@ -29,6 +29,12 @@ void uTLB_RefillHandler()
 }
 
 /* Helper functions*/
+
+bool isDeviceSemaphore(int* semAddr) 
+{
+    return (semAddr >= &device_semaphores[0]) && (semAddr < &device_semaphores[SEMDEVLEN]);
+}
+
 pcb_t *getRoot(pcb_t *current)
 {
     if (current->p_parent == NULL)
@@ -82,8 +88,8 @@ void killProgeny(pcb_t *term)
     {
         // bloccato in attesa di un sem
         outBlocked(term);
-        // TODO: Ricerca sui semafori dei device, in caso decremento
-        // soft_block_counter--;
+        if(isDeviceSemaphore(term->p_semAdd)) 
+            soft_block_counter--;
     }
     else if (term != current_process)
     {
@@ -145,8 +151,11 @@ void NSYS2(state_t *excState)
     // terminazione processo
     if (term != NULL)
     {
-        killProgeny(term);
+        // stacco il processo term dall'albero dei processi creando un'isola che non ha
+        // dipendenze da processi attivi.
+        // cosicché
         outChild(term);
+        killProgeny(term);
     }
     scheduler();
 }
@@ -163,6 +172,8 @@ void NSYS3(state_t *excState)
         current_process->p_s = *excState;
 
         insertBlocked(semAdd, current_process);
+        if(isDeviceSemaphore(semAdd))
+            soft_block_counter++;
         scheduler();
     }
     else
@@ -182,17 +193,30 @@ void NSYS4(state_t *excState)
     }
     else
     {
-        current_process = removeBlocked(semAdd);
+        insertProcQ(&ready_queue, removeBlocked(semAdd)); // il processo appena liberato, va in ready queue
+        if(isDeviceSemaphore(semAdd))
+        {
+            soft_block_counter--;
+        }
+
     }
 }
 
 // DoIO
 void NSYS5(state_t *excState)
-{
-    // in reg_a1 è presente l'indice che punta al semaforo su cui current proc si blocca
-    int semIndex = (int)excState->reg_a1;
-    excState->reg_a1 = device_semaphores[semIndex];
-    NSYS3(excState);
+{   
+    memaddr commandAddr = (memaddr)excState->reg_a1;
+    // Ottengo l'indice del device
+    // - commandAddr -> indirizzo da cui arriva il comando
+    // - START_DEVREG -> indirizzo di partenza dal quale iniziano le aree contigue in cui sono salvati i devices
+    // - commandAddr - START_DEVREG = ottengo un offset da cui posso ottenere l'indice del device, dividendolo
+    //                                per lo spazio di memoria occupato da un device.
+    int devIndex = (commandAddr - START_DEVREG) / 0x10;
+    excState->reg_a1 = device_semaphores[devIndex];
+    NSYS3(excState); //faccio la p sul semaforo indicato dal cont. del registro a1
+    soft_block_counter++;
+    
+
 }
 
 // GetCPUTime
