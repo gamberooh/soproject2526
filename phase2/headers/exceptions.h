@@ -7,11 +7,11 @@
  *  (e.g. uTLB_RefillHandler).
  */
 
-bool __CAUSE_IS_TLB__(unsigned int cause);
+int __CAUSE_IS_TLB__(unsigned int cause);
 
-bool __CAUSE_IS_SYSCALL__(unsigned int cause);
+int __CAUSE_IS_SYSCALL__(unsigned int cause);
 
-bool __CAUSE_IS_TRAP__(unsigned int cause);
+int __CAUSE_IS_TRAP__(unsigned int cause);
 
 /* Helper functions*/
 pcb_t* getRoot(pcb_t* current);

@@ -33,7 +33,7 @@ bool IS_TERMINAL_TX(unsigned int id)
 
 bool IS_TERMINAL(unsigned int id)
 {
-    return id >= SEM_TERM_RX_0 && id <= SEM_TERM_TX_7;
+    return id >= SEM_TERM_START && id <= SEM_TERM_END;
 }
 
 void handleInterrupt()

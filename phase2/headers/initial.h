@@ -1,7 +1,6 @@
 #ifndef INITIAL_H
 #define INITIAL_H
 
-#include <stdbool.h>
 #include "../../phase1/headers/asl.h";
 #include "../../phase1/headers/pcb.h";
 #include "./interrupts.h";

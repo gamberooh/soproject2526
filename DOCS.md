@@ -103,3 +103,15 @@ Itera sulla lista dei semafori per trovare il semaforo, la cui lista dei suoi pr
 ### `headBlocked(semAdd)`
 
 Itera sulla lista dei processi bloccati sul semaforo il cui indirizzo è passato per parametro. Se il processo è trovato, ritorna la testa di tale lista. Altrimenti ritorna **NULL**.
+
+---
+
+# Fase 2
+
+## Inizializzazione del Nucleo
+
+## Scheduler
+
+## Exception handler
+
+## Interrupt handler

@@ -1,17 +1,17 @@
 #include "./headers/exceptions.h";
 
 /* Private Check methods */
-bool __CAUSE_IS_TLB__(unsigned int causeCode)
+int __CAUSE_IS_TLB__(unsigned int causeCode)
 {
     return (causeCode <= EXC_MOD && causeCode >= EXC_UTLBS);
 }
 
-bool __CAUSE_IS_SYSCALL__(unsigned int causeCode)
+int __CAUSE_IS_SYSCALL__(unsigned int causeCode)
 {
     return (causeCode == EXC_ECU || causeCode == EXC_ECM);
 }
 
-bool __CAUSE_IS_TRAP__(unsigned int causeCode)
+int __CAUSE_IS_TRAP__(unsigned int causeCode)
 {
     return (
         (causeCode <= EXC_IAM && causeCode >= EXC_SAF) || causeCode == EXC_ECS || causeCode == 10 || (causeCode <= EXC_IPF && causeCode >= 23));
@@ -30,7 +30,7 @@ void uTLB_RefillHandler()
 
 /* Helper functions*/
 
-bool isDeviceSemaphore(int *semAddr)
+int isDeviceSemaphore(int *semAddr)
 {
     return (semAddr >= &device_semaphores[0]) && (semAddr < &device_semaphores[SEMDEVLEN]);
 }
@@ -168,15 +168,18 @@ void NSYS3(state_t *excState)
     if (*semAdd <= 0)
     {
         // Istruzioni per SYSCALL bloccanti
-        // excState->pc_epc += 4; dovremmo cancelare questa riga, perche incrementiamo pc_epc già in syscall_exception_handler
-
+        excState->pc_epc += 4;
         current_process->p_s = *excState;
-
+        
         if (insertBlocked(semAdd, current_process))
         {
-            passUpOrDie(GENERALEXCEPT); // se ci doesse essere un errore nell'inserimento del processo nella ASL, allora faccio pass up al processo padre
+            // se ci dovesse essere un errore nell'inserimento del processo
+            // nella ASL, allora faccio pass up al processo padre
+            passUpOrDie(GENERALEXCEPT);
             return;
         }
+        // Se semAdd fa parte dei descrittori dei semafori di device
+        // dobbiamo incrementare il soft_block_counter da spec.
         if (isDeviceSemaphore(semAdd))
         {
             soft_block_counter++;
@@ -185,6 +188,7 @@ void NSYS3(state_t *excState)
     }
     else
     {
+        // Non è bloccante 
         (*semAdd)--; // caso non bloccante, decremento il semaforo e continuo l'esecuzione del processo senza passare allo scheduler
         // excState->pc_epc += 4; anche questa da cancellare secondo me
     }
@@ -217,12 +221,30 @@ void NSYS5(state_t *excState)
     // - START_DEVREG -> indirizzo di partenza dal quale iniziano le aree contigue in cui sono salvati i devices
     // - commandAddr - START_DEVREG = ottengo un offset da cui posso ottenere l'indice del device, dividendolo
     //                                per lo spazio di memoria occupato da un device.
+    // ogni device è grande 16 bit
     int devIndex = (commandAddr - START_DEVREG) / 0x10;
     excState->reg_a1 = device_semaphores[devIndex];
     NSYS3(excState); // faccio la p sul semaforo indicato dal cont. del registro a1
     soft_block_counter++;
+
+    if (IS_TERMINAL(devIndex)) 
+    {
+        if(IS_TERMINAL_RX(devIndex)) {
+            
+        }
+
+        else if (IS_TERMINAL_TX(devIndex)) {
+            
+        }
+
+    }
+
+    // Quando il sub device (del terminal) lancia un interrupt, il nucleo fa una V() sul sotto-device dedicato
+
+
 }
 
+// (a0 -> nSyscall, a1 -> reg generale, a2, a3)
 // GetCPUTime
 void NSYS6(state_t *excState)
 {
@@ -283,6 +305,7 @@ void NSYS10(state_t *excState)
 
 void syscall_exception_handler(state_t *excState)
 {
+    int isBlocking = FALSE;
     unsigned int previousMode = (excState->status & MSTATUS_MPP_MASK);
 
     // Simula un Program Trap per istruzione privilegiata
@@ -306,16 +329,13 @@ void syscall_exception_handler(state_t *excState)
 
         case TERMPROCESS:
             NSYS2(excState);
-            return; // bloccante
+            isBlocking = TRUE;
+            break;
 
         case PASSEREN: // caso speciale, perche puo essere sia bloccante che non.
-            int *semAdd = (int *)excState->reg_a1;
-            bool isBlocking = (*semAdd <= 0);
             NSYS3(excState);
-            if (isBlocking)
-            {
-                return; // bloccante
-            }
+            int *semAdd = (int *)excState->reg_a1;
+            isBlocking = *semAdd <= 0;
             break;
 
         case VERHOGEN:
@@ -324,7 +344,8 @@ void syscall_exception_handler(state_t *excState)
 
         case DOIO:
             NSYS5(excState);
-            return; // bloccante
+            isBlocking = TRUE;
+            break;
 
         case GETTIME:
             NSYS6(excState);
@@ -332,7 +353,8 @@ void syscall_exception_handler(state_t *excState)
 
         case CLOCKWAIT:
             NSYS7(excState);
-            return; // bloccante
+            isBlocking = TRUE; 
+            break;
 
         case GETSUPPORTPTR:
             NSYS8(excState);
@@ -344,16 +366,18 @@ void syscall_exception_handler(state_t *excState)
 
         case YIELD:
             NSYS10(excState);
-            return; // bloccante
+            isBlocking = TRUE;
+            break;
         default:
-            passUpOrDie(GENERALEXCEPT); // aggiungo un default per gestire codici syscall non validi
+            passUpOrDie(GENERALEXCEPT); // codici SYSCALL non validi
         }
-        // SOLO PER LE SYSCALL NON BLOCCANTI, per quelle bloccanti il passaggio allo scheduler avviene all'interno della syscall stessa, dopo aver inserito il processo nella ASL
-        current_process->p_s = *excState; // aggiorno lo stato del processo corrente(questo vale per le chiamate NON BLOCCANTI che non fanno passare il controllo allo scheduler)
-        LDST(&current_process->p_s);      // ricarico lo stato del processo corrente
-                                          // int retValue = SYSCALL(CREATEPROCESS, excState->reg_a1, excState->reg_a2, excState->reg_a3);
-                                          // questa riga qui sopra è da eliminare, perche non possiamo fare una chiamata di sistema all'interno del gestore di sistema.
-        // praticamente dopo una syscall, andremo a l'ultim riga creando un nuovo processo con SYSCALL(CREATEPROCESS...) diventa poi un loop inifinito di creaizione di processi.
+
+        if (!isBlocking) {
+            // SOLO PER LE SYSCALL NON BLOCCANTI, per quelle bloccanti il passaggio allo scheduler avviene all'interno della syscall stessa, dopo aver inserito il processo nella ASL
+            current_process->p_s = *excState; // aggiorno lo stato del processo corrente(questo vale per le chiamate NON BLOCCANTI che non fanno passare il controllo allo scheduler)
+            LDST(&current_process->p_s);      // ricarico lo stato del processo corrente
+        }
+
     }
 }
 

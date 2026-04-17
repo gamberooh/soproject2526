@@ -68,20 +68,28 @@
 #define SEM_TERM_TX_6 47
 #define SEM_TERM_TX_7 48
 
-bool IS_GENERAL(unsigned int id);
 
-bool IS_DISK(unsigned int id);
+/* --- Limiti per terminal devices --- */
 
-bool IS_FLASH(unsigned int id);
+#define SEM_TERM_START 33
+#define SEM_TERM_END 48
 
-bool IS_ETHERNET(unsigned int id);
+int IS_GENERAL(unsigned int id);
 
-bool IS_PRINTER(unsigned int id);
+int IS_DISK(unsigned int id);
 
-bool IS_TERMINAL_RX(unsigned int id);
+int IS_FLASH(unsigned int id);
 
-bool IS_TERMINAL_TX(unsigned int id);
+int IS_ETHERNET(unsigned int id);
 
-bool IS_TERMINAL(unsigned int id);
+int IS_PRINTER(unsigned int id);
+
+int IS_TERMINAL_RX(unsigned int id);
+
+int IS_TERMINAL_TX(unsigned int id);
+
+int IS_TERMINAL(unsigned int id);
+
+void handleInterrupt();
 
 #endif
