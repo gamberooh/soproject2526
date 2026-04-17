@@ -7,8 +7,8 @@ struct list_head ready_queue;
 pcb_t *current_process;
 int device_semaphores[SEMDEVLEN];
 void populate_puv(passupvector_t *puv)
-{                                                            // se la cpu non trova un indirizzo in memoria (TLB Refill), va a leggere questa istruzione d
-    puv->tlb_refill_handler = (memaddr)uTLB_RefillHandler(); // tlb_refill_events_handler(); // puv è un puntatore alla passupvector, tlb_refill_handler è un campo della passupvector che contiene l'indirizzo della funzione da chiamare in caso di TLB Refill, uTLB_RefillHandler è la funzione che gestisce il TLB Refill
+{                                                          // se la cpu non trova un indirizzo in memoria (TLB Refill), va a leggere questa istruzione d
+    puv->tlb_refill_handler = (memaddr)uTLB_RefillHandler; // tlb_refill_events_handler(); // puv è un puntatore alla passupvector, tlb_refill_handler è un campo della passupvector che contiene l'indirizzo della funzione da chiamare in caso di TLB Refill, uTLB_RefillHandler è la funzione che gestisce il TLB Refill
 }
 
 void set_sp_tlb_refill(passupvector_t *puv)
@@ -18,7 +18,7 @@ void set_sp_tlb_refill(passupvector_t *puv)
 
 void connect_exception_handler(passupvector_t *puv)
 { // funzione che gestisce le altre emergenze(crash, system call, ecc). Quando viene chiamata una di queste emergenze, la CPU va a leggere l'indirizzo della funzione da chiamare in caso di emergenza (exception_handler) e lo stack pointer da usare (exception_stackPtr) dalla passupvector, e chiama la funzione di gestione dell'emergenza (exceptionHandler) con lo stack pointer impostato a KERNELSTACK
-    puv->exception_handler = (memaddr)exception_handler();
+    puv->exception_handler = (memaddr)exception_handler;
     puv->exception_stackPtr = KERNELSTACK;
 }
 

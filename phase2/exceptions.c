@@ -170,7 +170,7 @@ void NSYS3(state_t *excState)
         // Istruzioni per SYSCALL bloccanti
         excState->pc_epc += 4;
         current_process->p_s = *excState;
-        
+
         if (insertBlocked(semAdd, current_process))
         {
             // se ci dovesse essere un errore nell'inserimento del processo
@@ -188,7 +188,7 @@ void NSYS3(state_t *excState)
     }
     else
     {
-        // Non è bloccante 
+        // Non è bloccante
         (*semAdd)--; // caso non bloccante, decremento il semaforo e continuo l'esecuzione del processo senza passare allo scheduler
         // excState->pc_epc += 4; anche questa da cancellare secondo me
     }
@@ -222,26 +222,45 @@ void NSYS5(state_t *excState)
     // - commandAddr - START_DEVREG = ottengo un offset da cui posso ottenere l'indice del device, dividendolo
     //                                per lo spazio di memoria occupato da un device.
     // ogni device è grande 16 bit
+    int *indirizzoa1 = (int *)excState->reg_a1;
+    int indirizzoa_2 = (int)excState->reg_a2;
+    *indirizzoa1 = indirizzoa_2;
+
     int devIndex = (commandAddr - START_DEVREG) / 0x10;
-    excState->reg_a1 = device_semaphores[devIndex];
-    NSYS3(excState); // faccio la p sul semaforo indicato dal cont. del registro a1
-    soft_block_counter++;
-
-    if (IS_TERMINAL(devIndex)) 
+    int offset = (commandAddr - START_DEVREG) % 0x10;
+    int semIndex;
+    if (devIndex >= 32)
     {
-        if(IS_TERMINAL_RX(devIndex)) {
-            
+        if (offset < 8)
+        {
+            semIndex = SEM_TERM_RX_0 + (devIndex - 32);
         }
-
-        else if (IS_TERMINAL_TX(devIndex)) {
-            
+        else
+        {
+            semIndex = SEM_TERM_TX_0 + (devIndex - 32);
         }
-
     }
+    else
+    {
+        semIndex = devIndex + 1;
+    }
+    // excState->reg_a1 = device_semaphores[devIndex];
+    NSYS3(excState); // faccio la p sul semaforo indicato dal cont. del registro a1
+    // soft_block_counter++;
+
+    // if (IS_TERMINAL(devIndex))
+    /* {
+         if(IS_TERMINAL_RX(devIndex)) {
+
+         }
+
+         else if (IS_TERMINAL_TX(devIndex)) {
+
+         }
+
+     }*/
 
     // Quando il sub device (del terminal) lancia un interrupt, il nucleo fa una V() sul sotto-device dedicato
-
-
 }
 
 // (a0 -> nSyscall, a1 -> reg generale, a2, a3)
@@ -353,7 +372,7 @@ void syscall_exception_handler(state_t *excState)
 
         case CLOCKWAIT:
             NSYS7(excState);
-            isBlocking = TRUE; 
+            isBlocking = TRUE;
             break;
 
         case GETSUPPORTPTR:
@@ -372,12 +391,12 @@ void syscall_exception_handler(state_t *excState)
             passUpOrDie(GENERALEXCEPT); // codici SYSCALL non validi
         }
 
-        if (!isBlocking) {
+        if (!isBlocking)
+        {
             // SOLO PER LE SYSCALL NON BLOCCANTI, per quelle bloccanti il passaggio allo scheduler avviene all'interno della syscall stessa, dopo aver inserito il processo nella ASL
             current_process->p_s = *excState; // aggiorno lo stato del processo corrente(questo vale per le chiamate NON BLOCCANTI che non fanno passare il controllo allo scheduler)
             LDST(&current_process->p_s);      // ricarico lo stato del processo corrente
         }
-
     }
 }
 
