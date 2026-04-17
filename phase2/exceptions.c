@@ -30,7 +30,7 @@ void uTLB_RefillHandler()
 
 /* Helper functions*/
 
-bool isDeviceSemaphore(int* semAddr) 
+bool isDeviceSemaphore(int *semAddr)
 {
     return (semAddr >= &device_semaphores[0]) && (semAddr < &device_semaphores[SEMDEVLEN]);
 }
@@ -86,9 +86,10 @@ void killProgeny(pcb_t *term)
 
     if (term->p_semAdd != NULL)
     {
+        int *semAddr = term->p_semAdd; // salvo prima l'indirizzo del semaforo qui, perche outBlocked mette a NULL il p_semAdd del processo term. mi serve dunque per il controllo di isDeviceSemaphore dopo outBlocked.
         // bloccato in attesa di un sem
         outBlocked(term);
-        if(isDeviceSemaphore(term->p_semAdd)) 
+        if (isDeviceSemaphore(semAddr))
             soft_block_counter--;
     }
     else if (term != current_process)
@@ -167,19 +168,25 @@ void NSYS3(state_t *excState)
     if (*semAdd <= 0)
     {
         // Istruzioni per SYSCALL bloccanti
-        excState->pc_epc += 4;
-        updateCPUTime();
+        // excState->pc_epc += 4; dovremmo cancelare questa riga, perche incrementiamo pc_epc già in syscall_exception_handler
+
         current_process->p_s = *excState;
 
-        insertBlocked(semAdd, current_process);
-        if(isDeviceSemaphore(semAdd))
+        if (insertBlocked(semAdd, current_process))
+        {
+            passUpOrDie(GENERALEXCEPT); // se ci doesse essere un errore nell'inserimento del processo nella ASL, allora faccio pass up al processo padre
+            return;
+        }
+        if (isDeviceSemaphore(semAdd))
+        {
             soft_block_counter++;
+        }
         scheduler();
     }
     else
     {
-        (*semAdd)--;
-        excState->pc_epc += 4;
+        (*semAdd)--; // caso non bloccante, decremento il semaforo e continuo l'esecuzione del processo senza passare allo scheduler
+        // excState->pc_epc += 4; anche questa da cancellare secondo me
     }
 }
 
@@ -194,17 +201,16 @@ void NSYS4(state_t *excState)
     else
     {
         insertProcQ(&ready_queue, removeBlocked(semAdd)); // il processo appena liberato, va in ready queue
-        if(isDeviceSemaphore(semAdd))
+        if (isDeviceSemaphore(semAdd))
         {
             soft_block_counter--;
         }
-
     }
 }
 
 // DoIO
 void NSYS5(state_t *excState)
-{   
+{
     memaddr commandAddr = (memaddr)excState->reg_a1;
     // Ottengo l'indice del device
     // - commandAddr -> indirizzo da cui arriva il comando
@@ -213,26 +219,67 @@ void NSYS5(state_t *excState)
     //                                per lo spazio di memoria occupato da un device.
     int devIndex = (commandAddr - START_DEVREG) / 0x10;
     excState->reg_a1 = device_semaphores[devIndex];
-    NSYS3(excState); //faccio la p sul semaforo indicato dal cont. del registro a1
+    NSYS3(excState); // faccio la p sul semaforo indicato dal cont. del registro a1
     soft_block_counter++;
-    
-
 }
 
 // GetCPUTime
-void NSYS6(state_t *excState);
+void NSYS6(state_t *excState)
+{
+    excState->reg_a0 = (unsigned int)current_process->p_time; // dato che ho aggiornato il tempo di CPU in updateCPUTime all'inizio di exception_handler, posso semplicemente restituire il tempo di CPU del processo corrente sneza fare calcoli aggiuntivi.
+};
 
 // WaitForClock
-void NSYS7(state_t *excState);
+void NSYS7(state_t *excState)
+{
+    int *semAdd = &device_semaphores[SEM_PSEUDOCLOCK]; // SEM_PSEUDOCLOCK è l'indice del semaforo associato al clock(100ms)
+    current_process->p_s = *excState;                  // salvo lo stato del processo prima di bloccarlo
+    if (insertBlocked(semAdd, current_process))
+    {
+        passUpOrDie(GENERALEXCEPT);
+        return;
+    } // insertBlocked da false se l'inserimento va bene, True se ce errore (es ASL piena)
+    soft_block_counter++;
+    scheduler();
+};
 
 // GetSupportData
-void NSYS8(state_t *excState);
+void NSYS8(state_t *excState)
+{
+    // prendo il valore del support struct pointer del processo corrente e lo restituisco nel registro a0. se il puntatore è NULL, restituisco 0
+    excState->reg_a0 = (unsigned int)current_process->p_supportStruct;
+};
 
 // GetProcessID
-void NSYS9(state_t *excState);
+void NSYS9(state_t *excState)
+{
+    // se il parametro a1 è 0, restituisco il pid del processo corrente, altrimenti restituisco il pid del padre
+    int parent = (int)excState->reg_a1;
+    if (parent == 0)
+    {
+        excState->reg_a0 = current_process->p_pid;
+    }
+    else
+    {
+        if (current_process->p_parent == NULL) // caso in cui il processo corrente sia il processo root
+        {
+            excState->reg_a0 = 0;
+        }
+        else
+        {
+            excState->reg_a0 = current_process->p_parent->p_pid;
+        }
+    }
+};
 
 // Yield
-void NSYS10(state_t *excState);
+void NSYS10(state_t *excState)
+{
+    // il processo che la chiama cede il posto nella cpu e va in fondo alla ready_queue
+    current_process->p_s = *excState; // salvo lo stato del processo prima di cederlo
+    insertProcQ(&ready_queue, current_process);
+    scheduler();
+};
 
 void syscall_exception_handler(state_t *excState)
 {
@@ -259,10 +306,16 @@ void syscall_exception_handler(state_t *excState)
 
         case TERMPROCESS:
             NSYS2(excState);
-            break;
+            return; // bloccante
 
-        case PASSEREN:
+        case PASSEREN: // caso speciale, perche puo essere sia bloccante che non.
+            int *semAdd = (int *)excState->reg_a1;
+            bool isBlocking = (*semAdd <= 0);
             NSYS3(excState);
+            if (isBlocking)
+            {
+                return; // bloccante
+            }
             break;
 
         case VERHOGEN:
@@ -271,7 +324,7 @@ void syscall_exception_handler(state_t *excState)
 
         case DOIO:
             NSYS5(excState);
-            break;
+            return; // bloccante
 
         case GETTIME:
             NSYS6(excState);
@@ -279,7 +332,7 @@ void syscall_exception_handler(state_t *excState)
 
         case CLOCKWAIT:
             NSYS7(excState);
-            break;
+            return; // bloccante
 
         case GETSUPPORTPTR:
             NSYS8(excState);
@@ -291,10 +344,16 @@ void syscall_exception_handler(state_t *excState)
 
         case YIELD:
             NSYS10(excState);
-            break;
+            return; // bloccante
+        default:
+            passUpOrDie(GENERALEXCEPT); // aggiungo un default per gestire codici syscall non validi
         }
-
-        int retValue = SYSCALL(CREATEPROCESS, excState->reg_a1, excState->reg_a2, excState->reg_a3);
+        // SOLO PER LE SYSCALL NON BLOCCANTI, per quelle bloccanti il passaggio allo scheduler avviene all'interno della syscall stessa, dopo aver inserito il processo nella ASL
+        current_process->p_s = *excState; // aggiorno lo stato del processo corrente(questo vale per le chiamate NON BLOCCANTI che non fanno passare il controllo allo scheduler)
+        LDST(&current_process->p_s);      // ricarico lo stato del processo corrente
+                                          // int retValue = SYSCALL(CREATEPROCESS, excState->reg_a1, excState->reg_a2, excState->reg_a3);
+                                          // questa riga qui sopra è da eliminare, perche non possiamo fare una chiamata di sistema all'interno del gestore di sistema.
+        // praticamente dopo una syscall, andremo a l'ultim riga creando un nuovo processo con SYSCALL(CREATEPROCESS...) diventa poi un loop inifinito di creaizione di processi.
     }
 }
 
@@ -318,6 +377,7 @@ void passUpOrDie(int except_index)
 
 void exception_handler()
 {
+    updateCPUTime(); // chiamo updateCPUTime per aggiornare il tempo di CPU per tutti i tipi di eccezione, in questo modo evito di doverlo chiamare in ogni gestore di eccezione specifico.
     // Lo stato di eccezione del processore, al momento dell'eccezione, viene salvato all'indirizzo BIOSDATAPAGE
     state_t *excState = GET_EXCEPTION_STATE_PTR(process_counter);
 

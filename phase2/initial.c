@@ -60,7 +60,7 @@ void init_new_proc(void)
         // tutti i campi dopo la freccia sono campi della struttura state_t, sempre nel file types.h, che rappresenta lo stato del processo, e che contiene il program counter (pc_epc), il registro di stato (status) e il registro delle interrupt (mie)
         RAMTOP(ramtop);         // ottengo l'indirizzo della cima della memoria RAM
         p->p_s.reg_sp = ramtop; // imposto lo stack pointer del processo alla cima della memoria RAM
-
+        p->p_time = 0;
         insertProcQ(&ready_queue, p);
         process_counter++;
     }
