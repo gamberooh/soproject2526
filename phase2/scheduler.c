@@ -1,4 +1,6 @@
-#include "./headers/scheduler.h"
+#include "./headers/initial.h"
+
+cpu_t init_time = 0;
 
 void updateCPUTime()
 {

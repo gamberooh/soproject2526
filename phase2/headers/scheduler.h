@@ -1,6 +1,11 @@
-#include "initial.h";
+#ifndef SCHEDULER_H
+#define SCHEDULER_H
 
-extern cpu_t init_time = 0;
-extern void updateCPUTime();
+#include "../../headers/types.h"
 
-void scheduler();
+extern cpu_t init_time;
+void updateCPUTime(void);
+
+void scheduler(void);
+
+#endif

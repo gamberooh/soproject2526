@@ -1,37 +1,37 @@
-#include "./headers/interrupts.h";
+#include "./headers/initial.h"
 unsigned int bitmap_value;
 int DevNo;
-bool IS_DISK(unsigned int id)
+int IS_DISK(unsigned int id)
 {
     return id >= SEM_DISK_0 && id <= SEM_DISK_7;
 }
 
-bool IS_FLASH(unsigned int id)
+int IS_FLASH(unsigned int id)
 {
     return id >= SEM_FLASH_0 && id <= SEM_FLASH_7;
 }
 
-bool IS_ETHERNET(unsigned int id)
+int IS_ETHERNET(unsigned int id)
 {
     return id >= SEM_ETHERNET_0 && id <= SEM_ETHERNET_7;
 }
 
-bool IS_PRINTER(unsigned int id)
+int IS_PRINTER(unsigned int id)
 {
     return id >= SEM_PRINTER_0 && id <= SEM_PRINTER_7;
 }
 
-bool IS_TERMINAL_RX(unsigned int id)
+int IS_TERMINAL_RX(unsigned int id)
 {
     return id >= SEM_TERM_RX_0 && id <= SEM_TERM_RX_7;
 }
 
-bool IS_TERMINAL_TX(unsigned int id)
+int IS_TERMINAL_TX(unsigned int id)
 {
     return id >= SEM_TERM_TX_0 && id <= SEM_TERM_TX_7;
 }
 
-bool IS_TERMINAL(unsigned int id)
+int IS_TERMINAL(unsigned int id)
 {
     return id >= SEM_TERM_START && id <= SEM_TERM_END;
 }
@@ -106,7 +106,7 @@ void handleInterrupt()
         LDIT(PSECOND);
 
         pcb_t *unblocked_pcb;
-        while (unblocked_pcb = removeBlocked(&device_semaphores[SEM_PSEUDOCLOCK]) != NULL)
+        while ((unblocked_pcb = removeBlocked(&device_semaphores[SEM_PSEUDOCLOCK])) != NULL)
         {
             insertProcQ(&ready_queue, unblocked_pcb);
             soft_block_counter--;

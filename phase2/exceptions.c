@@ -1,4 +1,5 @@
-#include "./headers/exceptions.h";
+#include "./headers/exceptions.h"
+#include <uriscv/types.h>
 
 /* Private Check methods */
 int __CAUSE_IS_TLB__(unsigned int causeCode)
@@ -400,7 +401,7 @@ void syscall_exception_handler(state_t *excState)
     }
 }
 
-void trap_exception_handler();
+void trap_exception_handler(state_t *excState);
 
 void passUpOrDie(int except_index)
 {

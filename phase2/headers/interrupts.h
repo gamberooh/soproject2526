@@ -1,7 +1,7 @@
 #ifndef INTERRUPTS_H
 #define INTERRUPTS_H
 
-#include "initial.h";
+#include "../../headers/types.h"
 #include <uriscv/liburiscv.h>
 #include <uriscv/cpu.h>
 

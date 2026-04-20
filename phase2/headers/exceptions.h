@@ -1,4 +1,5 @@
-#include "initial.h";
+#include "initial.h"
+#include <uriscv/types.h>
 
 /**
  *  TLB, Program Trap, and SYSCALL exception handlers.
@@ -17,8 +18,10 @@ int __CAUSE_IS_TRAP__(unsigned int cause);
 pcb_t* getRoot(pcb_t* current);
 pcb_t* findByPid(pcb_t* root, int pid);
 void killProgeny(pcb_t* term);
+void passUpOrDie(int except_index);
 
 /* SYCALLs */
+
 void NSYS1(state_t* excState);
 void NSYS2(state_t* excState);
 void NSYS3(state_t* excState);
@@ -32,10 +35,10 @@ void NSYS10(state_t* excState);
 
 /* HANDLERS */
 
-void tlb_exception_handler();
+void tlb_exception_handler(void);
 
 void syscall_exception_handler(state_t* mode);
 
-void trap_exception_handler();
+void trap_exception_handler(state_t *excState);
 
-void exception_handler();
+void exception_handler(void);
