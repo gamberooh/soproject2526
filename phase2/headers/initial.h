@@ -13,7 +13,10 @@ extern struct list_head ready_queue;
 extern int process_counter;
 extern int soft_block_counter;
 extern int device_semaphores[];
-void uTLB_RefillHandler(void);
+
+void* memcpy(void *dest, const void *src, unsigned int len);
+
+void myTlbRefillHandler(void);
 void exception_handler(void);
 
 void populate_puv(passupvector_t *puv);

@@ -18,7 +18,7 @@ int __CAUSE_IS_TRAP__(unsigned int causeCode)
         (causeCode <= EXC_IAM && causeCode >= EXC_SAF) || causeCode == EXC_ECS || causeCode == 10 || (causeCode <= EXC_IPF && causeCode >= 23));
 }
 
-void uTLB_RefillHandler()
+void myTlbRefillHandler()
 {
     // This code was provided in ./p2test.c
     // It has to be replaced in phase3
@@ -114,7 +114,8 @@ void NSYS1(state_t *excState)
     state_t *newState = (state_t *)excState->reg_a1;
     int prio = (int)excState->reg_a2;
     support_t *supportLevel = (support_t *)excState->reg_a3;
-    pcb_t *newPcb = allocPcb();
+    pcb_t *newPcb = NULL;
+    memcpy(newPcb, allocPcb(), sizeof(pcb_t));
 
     if (newPcb == NULL)
     {
@@ -169,7 +170,6 @@ void NSYS3(state_t *excState)
     if (*semAdd <= 0)
     {
         // Istruzioni per SYSCALL bloccanti
-        excState->pc_epc += 4;
         current_process->p_s = *excState;
 
         if (insertBlocked(semAdd, current_process))
@@ -190,8 +190,7 @@ void NSYS3(state_t *excState)
     else
     {
         // Non è bloccante
-        (*semAdd)--; // caso non bloccante, decremento il semaforo e continuo l'esecuzione del processo senza passare allo scheduler
-        // excState->pc_epc += 4; anche questa da cancellare secondo me
+        (*semAdd)--; 
     }
 }
 
@@ -229,6 +228,7 @@ void NSYS5(state_t *excState)
 
     int devIndex = (commandAddr - START_DEVREG) / 0x10;
     int offset = (commandAddr - START_DEVREG) % 0x10;
+
     int semIndex;
     if (devIndex >= 32)
     {
@@ -243,9 +243,10 @@ void NSYS5(state_t *excState)
     }
     else
     {
+        // +1 giustificato dalla scelta di mettere pseudoclock per primo (0)
         semIndex = devIndex + 1;
     }
-    // excState->reg_a1 = device_semaphores[devIndex];
+    excState->reg_a1 = (memaddr) device_semaphores[semIndex];
     NSYS3(excState); // faccio la p sul semaforo indicato dal cont. del registro a1
     // soft_block_counter++;
 
@@ -338,8 +339,8 @@ void syscall_exception_handler(state_t *excState)
     // Controllo istruzione in kernel mode
     if (excState->reg_a0 < 0 && previousMode == MSTATUS_MPP_M)
     {
-        // Avanzo nel program counter di una word esplicitamente
-        excState->pc_epc += 4;
+        // // Avanzo nel program counter di una word esplicitamente
+        // excState->pc_epc += 4;
 
         switch (excState->reg_a0)
         {
@@ -353,9 +354,10 @@ void syscall_exception_handler(state_t *excState)
             break;
 
         case PASSEREN: // caso speciale, perche puo essere sia bloccante che non.
-            NSYS3(excState);
+            // È bloc sse il semVal alla chiamata è 0 o minore
             int *semAdd = (int *)excState->reg_a1;
             isBlocking = *semAdd <= 0;
+            NSYS3(excState);
             break;
 
         case VERHOGEN:
@@ -398,6 +400,8 @@ void syscall_exception_handler(state_t *excState)
             current_process->p_s = *excState; // aggiorno lo stato del processo corrente(questo vale per le chiamate NON BLOCCANTI che non fanno passare il controllo allo scheduler)
             LDST(&current_process->p_s);      // ricarico lo stato del processo corrente
         }
+        // Avanzo nel program counter di una word esplicitamente
+        excState->pc_epc += 4;
     }
 }
 
@@ -423,7 +427,7 @@ void exception_handler()
 {
     updateCPUTime(); // chiamo updateCPUTime per aggiornare il tempo di CPU per tutti i tipi di eccezione, in questo modo evito di doverlo chiamare in ogni gestore di eccezione specifico.
     // Lo stato di eccezione del processore, al momento dell'eccezione, viene salvato all'indirizzo BIOSDATAPAGE
-    state_t *excState = GET_EXCEPTION_STATE_PTR(process_counter);
+    state_t *excState = GET_EXCEPTION_STATE_PTR(current_process->p_pid);
 
     unsigned int excCause = excState->cause;
     unsigned int excStatus = excState->status;

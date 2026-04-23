@@ -35,7 +35,7 @@ void NSYS10(state_t* excState);
 
 /* HANDLERS */
 
-void tlb_exception_handler(void);
+void myTlbRefillHandler(void);
 
 void syscall_exception_handler(state_t* mode);
 
