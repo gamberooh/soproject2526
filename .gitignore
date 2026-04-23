@@ -1,4 +1,3 @@
-CMakeLists.txt
 compile_commands.json
 build
 term0.uriscv
