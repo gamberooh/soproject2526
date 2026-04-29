@@ -2,6 +2,9 @@
 
 cpu_t init_time = 0;
 
+void klog_print(char* str);
+
+
 void updateCPUTime()
 {
     cpu_t now;
@@ -16,7 +19,7 @@ void updateCPUTime()
 
 void scheduler()
 {
-
+    klog_print("Sono nel tunnel");
     current_process = removeProcQ(&ready_queue); // prendo il primo processo dalla ready queue e lo metto in esecuzione
     if (current_process != NULL)
     {                        // se c'è un processo da eseguire
@@ -37,7 +40,6 @@ void scheduler()
             unsigned int status = getSTATUS();
             status |= MSTATUS_MIE_MASK; // abilito globalmente gli interrupt
             setSTATUS(status);
-
             WAIT();
         }
         if (soft_block_counter == 0 && process_counter > 0)

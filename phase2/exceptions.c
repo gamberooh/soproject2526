@@ -2,6 +2,9 @@
 #include <uriscv/types.h>
 
 /* Private Check methods */
+
+void klog_print(char* str);
+
 int __CAUSE_IS_TLB__(unsigned int causeCode)
 {
     return (causeCode <= EXC_MOD && causeCode >= EXC_UTLBS);
@@ -114,8 +117,7 @@ void NSYS1(state_t *excState)
     state_t *newState = (state_t *)excState->reg_a1;
     int prio = (int)excState->reg_a2;
     support_t *supportLevel = (support_t *)excState->reg_a3;
-    pcb_t *newPcb = NULL;
-    memcpy(newPcb, allocPcb(), sizeof(pcb_t));
+    pcb_t *newPcb = allocPcb();
 
     if (newPcb == NULL)
     {
@@ -166,7 +168,7 @@ void NSYS2(state_t *excState)
 // Passeren
 void NSYS3(state_t *excState)
 {
-    int *semAdd = (int *)excState->reg_a1;
+    int *semAdd = (int*)excState->reg_a1;
     if (*semAdd <= 0)
     {
         // Istruzioni per SYSCALL bloccanti
@@ -200,6 +202,7 @@ void NSYS4(state_t *excState)
     int *semAdd = (int *)excState->reg_a1;
     if (headBlocked(semAdd) == NULL)
     {
+        // klog_print("Incremento il semaforo");
         (*semAdd)++;
     }
     else
@@ -207,6 +210,7 @@ void NSYS4(state_t *excState)
         insertProcQ(&ready_queue, removeBlocked(semAdd)); // il processo appena liberato, va in ready queue
         if (isDeviceSemaphore(semAdd))
         {
+            // klog_print("Sblocco processo");
             soft_block_counter--;
         }
     }
@@ -246,7 +250,8 @@ void NSYS5(state_t *excState)
         // +1 giustificato dalla scelta di mettere pseudoclock per primo (0)
         semIndex = devIndex + 1;
     }
-    excState->reg_a1 = (memaddr) device_semaphores[semIndex];
+    // Passo l'indirizzo di memoria dove è salvato il val del semaforo
+    excState->reg_a1 = (memaddr) &device_semaphores[semIndex];
     NSYS3(excState); // faccio la p sul semaforo indicato dal cont. del registro a1
     // soft_block_counter++;
 
@@ -339,8 +344,8 @@ void syscall_exception_handler(state_t *excState)
     // Controllo istruzione in kernel mode
     if (excState->reg_a0 < 0 && previousMode == MSTATUS_MPP_M)
     {
-        // // Avanzo nel program counter di una word esplicitamente
-        // excState->pc_epc += 4;
+        // Avanzo nel program counter di una word esplicitamente
+        excState->pc_epc += 4;
 
         switch (excState->reg_a0)
         {
@@ -400,8 +405,6 @@ void syscall_exception_handler(state_t *excState)
             current_process->p_s = *excState; // aggiorno lo stato del processo corrente(questo vale per le chiamate NON BLOCCANTI che non fanno passare il controllo allo scheduler)
             LDST(&current_process->p_s);      // ricarico lo stato del processo corrente
         }
-        // Avanzo nel program counter di una word esplicitamente
-        excState->pc_epc += 4;
     }
 }
 
@@ -410,7 +413,12 @@ void trap_exception_handler(state_t *excState);
 void passUpOrDie(int except_index)
 {
     if (current_process->p_supportStruct == NULL)
-        NSYS2(&current_process->p_s);
+    {
+        /* Termina il processo corrente e la sua progenie */
+        state_t termState;
+        termState.reg_a1 = 0; /* PID 0 indica il processo corrente */
+        NSYS2(&termState);
+    }
     else
     {
         state_t *bios_state = (state_t *)GET_EXCEPTION_STATE_PTR(0);
@@ -425,44 +433,40 @@ void passUpOrDie(int except_index)
 
 void exception_handler()
 {
-    updateCPUTime(); // chiamo updateCPUTime per aggiornare il tempo di CPU per tutti i tipi di eccezione, in questo modo evito di doverlo chiamare in ogni gestore di eccezione specifico.
-    // Lo stato di eccezione del processore, al momento dell'eccezione, viene salvato all'indirizzo BIOSDATAPAGE
-    state_t *excState = GET_EXCEPTION_STATE_PTR(current_process->p_pid);
-
+    updateCPUTime(); 
+    
+    state_t *excState = GET_EXCEPTION_STATE_PTR(0);
     unsigned int excCause = excState->cause;
-    unsigned int excStatus = excState->status;
 
-    // Estraggo il codice dell'eccezione e della modalita' usando le maschere
-    unsigned int excCode = (excCause & CAUSE_EXCCODE_MASK);
-
-    // 8.1, 8.2
-    if (current_process->p_s.reg_a0 > 0 || __CAUSE_IS_TRAP__(excCode))
+    /* 1. Gestione Interrupt (priorità massima) */
+    if (CAUSE_IS_INT(excCause))
     {
-        passUpOrDie(GENERALEXCEPT);
+        handleInterrupt();
         return;
     }
-    else if (excCause >= 24 && excCause <= 28) // 8.3
+
+    /* Calcolo Exception Code (bit 2-6) */
+    unsigned int excCode = (getCAUSE() & CAUSE_EXCCODE_MASK);
+
+
+    /* 2. TLB Exceptions (24-28) */
+    if (__CAUSE_IS_TLB__(excCode))
     {
         passUpOrDie(PGFAULTEXCEPT);
         return;
     }
 
-    unsigned int previousMode = excStatus & MSTATUS_MPP_MASK;
-
-    if (CAUSE_IS_INT(excCause))
-        handleInterrupt();
-
-    /*
-else if (__CAUSE_IS_TLB__(excCode))
-    tlb_exception_handler();
-*/
-    else if (__CAUSE_IS_SYSCALL__(excCode))
+    /* 3. SYSCALL Exceptions (8) */
+    if (__CAUSE_IS_SYSCALL__(excCode))
+    {
         syscall_exception_handler(excState);
-    /*
-        else if (__CAUSE_IS_TRAP__(excCode))
-            trap_exception_handler();
-    */
-    else
-        // codice eccezione non riconosciuto
         return;
+    }
+
+    /* 4. Trap */
+    if (__CAUSE_IS_TRAP__(excCode))
+    {
+        passUpOrDie(GENERALEXCEPT);
+        return;
+    } 
 }
