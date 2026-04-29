@@ -21,17 +21,6 @@ int __CAUSE_IS_TRAP__(unsigned int causeCode)
         (causeCode <= EXC_IAM && causeCode >= EXC_SAF) || causeCode == EXC_ECS || causeCode == 10 || (causeCode <= EXC_IPF && causeCode >= 23));
 }
 
-void myTlbRefillHandler()
-{
-    // This code was provided in ./p2test.c
-    // It has to be replaced in phase3
-    int prid = getPRID();
-    setENTRYHI(0x80000000);
-    setENTRYLO(0x00000000);
-    TLBWR();
-    LDST((state_t *)BIOSDATAPAGE);
-}
-
 /* Helper functions*/
 
 int isDeviceSemaphore(int *semAddr)
@@ -202,8 +191,9 @@ void NSYS4(state_t *excState)
     int *semAdd = (int *)excState->reg_a1;
     if (headBlocked(semAdd) == NULL)
     {
-        // klog_print("Incremento il semaforo");
-        (*semAdd)++;
+        stepV();
+        (*semAdd++);
+        klog_print("Incremento val sem");
     }
     else
     {

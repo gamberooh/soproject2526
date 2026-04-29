@@ -3,6 +3,7 @@
 
 #include "../../phase1/headers/asl.h"
 #include "../../phase1/headers/pcb.h"
+#include "../headers/klog.h"
 #include "./interrupts.h"
 #include "./scheduler.h"
 #include <uriscv/types.h>
@@ -16,7 +17,6 @@ extern int device_semaphores[];
 
 void* memcpy(void *dest, const void *src, unsigned int len);
 
-void myTlbRefillHandler(void);
 void exception_handler(void);
 
 void populate_puv(passupvector_t *puv);

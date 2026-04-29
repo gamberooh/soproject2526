@@ -142,16 +142,23 @@ void uTLB_RefillHandler() {
 /*                                                                   */
 /*                 p1 -- the root process                            */
 /*                                                                   */
+void step(){}
+
+void stepV(){}
+
 void test() {
     SYSCALL(VERHOGEN, (int)&sem_testsem, 0, 0); /* V(sem_testsem)   */
     SYSCALL(VERHOGEN, (int)&sem_testsem, 0, 0);
+    step();
     SYSCALL(VERHOGEN, (int)&sem_testsem, 0, 0);
-
+    step();
+    
     if (sem_testsem != 3) {
+        step();
         print("Error: wrong semaphore value\n");
         PANIC();
     }
-
+    
     SYSCALL(PASSEREN, (int)&sem_testsem, 0, 0);
     SYSCALL(PASSEREN, (int)&sem_testsem, 0, 0);
     SYSCALL(PASSEREN, (int)&sem_testsem, 0, 0);
@@ -160,6 +167,8 @@ void test() {
         print("Error: wrong semaphore value\n");
         PANIC();
     }
+
+    step();
 
     print("p1 v(sem_testsem)\n");
 

@@ -19,7 +19,6 @@ void updateCPUTime()
 
 void scheduler()
 {
-    klog_print("Sono nel tunnel");
     current_process = removeProcQ(&ready_queue); // prendo il primo processo dalla ready queue e lo metto in esecuzione
     if (current_process != NULL)
     {                        // se c'è un processo da eseguire
