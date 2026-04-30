@@ -158,8 +158,10 @@ void NSYS2(state_t *excState)
 void NSYS3(state_t *excState)
 {
     int *semAdd = (int*)excState->reg_a1;
-    if (*semAdd <= 0)
-    {
+    //CORREZIONE ZIZO
+    (*semAdd)--; //decremento il semaforo prima di controllare se è bloccante o meno, perche se è 0 o minore, allora è bloccante, altrimenti no. Se facessi il controllo prima, non riuscirei a distinguere tra i due casi.
+    if (*semAdd < 0) //solo < non <= (ad es se il valore del semaforo è -1 , emtra nell'if ma NON DECREMENTA, ed è per questo che decremento subito all'inizio)
+    { //se invece fosse stato un numero positivo ad es 1, decremento diventa 0,e non è bloccante quindi non entra nemmano nell'if, e il processo continua la sua esecuzione normalmente.
         // Istruzioni per SYSCALL bloccanti
         current_process->p_s = *excState;
 
@@ -178,21 +180,42 @@ void NSYS3(state_t *excState)
         }
         scheduler();
     }
-    else
+   /* else
     {
         // Non è bloccante
         (*semAdd)--; 
-    }
+    }*/  //questa non serve, perche il decremento del semaforo lo facciamo prima del controllo
 }
 
 // Verhogen
-void NSYS4(state_t *excState)
+void NSYS4(state_t *excState) //l'errore qui è che se il valore del semaforo fosse negativo, allora devo bloccare il processo che sta facendo la V() , MA QUI NON INCREM
 {
     int *semAdd = (int *)excState->reg_a1;
-    if (headBlocked(semAdd) == NULL)
+    
+    // 1. Incremento del valore del semaforo
+    (*semAdd)++;
+    
+    // 2. Se dopo l'incremento il valore è <= 0, c'era qualcuno bloccato
+    if (*semAdd <= 0) 
+    {
+        pcb_t *p = removeBlocked(semAdd);
+        
+        if (p != NULL) 
+        {
+            insertProcQ(&ready_queue, p);
+            
+            if (isDeviceSemaphore(semAdd)) 
+            {
+                soft_block_counter--;
+            }
+        }
+    }
+}
+
+   /* if (headBlocked(semAdd) == NULL)
     {
         stepV();
-        (*semAdd++);
+        (*semAdd)++;
         klog_print("Incremento val sem");
     }
     else
@@ -203,8 +226,8 @@ void NSYS4(state_t *excState)
             // klog_print("Sblocco processo");
             soft_block_counter--;
         }
-    }
-}
+    }*/
+
 
 // DoIO
 void NSYS5(state_t *excState)
@@ -350,8 +373,10 @@ void syscall_exception_handler(state_t *excState)
 
         case PASSEREN: // caso speciale, perche puo essere sia bloccante che non.
             // È bloc sse il semVal alla chiamata è 0 o minore
-            int *semAdd = (int *)excState->reg_a1;
-            isBlocking = *semAdd <= 0;
+            //int *semAdd = (int *)excState->reg_a1;
+            //isBlocking = *semAdd <= 0;
+            //inutili ormai qui perche il controllo di isBlocking lo facciamo direttamente dentro NSYS3
+            //qui *semAdd è ancora il valore del semaforo prima della P(), perche il decremento lo facciamo all'inizio di NSYS3, quindi se è 0 o minore, allora è bloccante, altrimenti no. Se facessi il controllo prima, non riuscirei a distinguere tra i due casi.
             NSYS3(excState);
             break;
 
