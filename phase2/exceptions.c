@@ -426,8 +426,6 @@ void syscall_exception_handler(state_t *excState)
     }
 }
 
-void trap_exception_handler(state_t *excState);
-
 void trap_exception_handler(state_t *excState)
 {
     (void)excState;
