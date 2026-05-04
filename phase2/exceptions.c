@@ -7,7 +7,7 @@ void klog_print(char* str);
 
 int __CAUSE_IS_TLB__(unsigned int causeCode)
 {
-    return (causeCode <= EXC_MOD && causeCode >= EXC_UTLBS);
+    return (causeCode >= EXC_MOD && causeCode <= EXC_UTLBS);
 }
 
 int __CAUSE_IS_SYSCALL__(unsigned int causeCode)
@@ -17,8 +17,12 @@ int __CAUSE_IS_SYSCALL__(unsigned int causeCode)
 
 int __CAUSE_IS_TRAP__(unsigned int causeCode)
 {
-    return (
-        (causeCode <= EXC_IAM && causeCode >= EXC_SAF) || causeCode == EXC_ECS || causeCode == 10 || (causeCode <= EXC_IPF && causeCode >= 23));
+  return (
+    (causeCode >= EXC_IAM && causeCode <= EXC_SAF) ||  // 0-7
+    causeCode == EXC_ECS ||                              // 9
+    causeCode == PRIVINSTR ||                            // 10 
+    (causeCode >= EXC_IPF && causeCode < EXC_MOD)           // 12-23
+    );
 }
 
 /* Helper functions*/
@@ -82,6 +86,9 @@ void killProgeny(pcb_t *term)
         int *semAddr = term->p_semAdd; // salvo prima l'indirizzo del semaforo qui, perche outBlocked mette a NULL il p_semAdd del processo term. mi serve dunque per il controllo di isDeviceSemaphore dopo outBlocked.
         // bloccato in attesa di un sem
         outBlocked(term);
+        // Compensa la P gia' effettuata dal processo terminato su quel semaforo.
+        // Senza questo riallineamento il semaforo resta troppo negativo.
+        
         if (isDeviceSemaphore(semAddr))
             soft_block_counter--;
     }
@@ -159,8 +166,7 @@ void NSYS3(state_t *excState)
 {
     int *semAdd = (int*)excState->reg_a1;
     //CORREZIONE ZIZO
-    (*semAdd)--; //decremento il semaforo prima di controllare se è bloccante o meno, perche se è 0 o minore, allora è bloccante, altrimenti no. Se facessi il controllo prima, non riuscirei a distinguere tra i due casi.
-    if (*semAdd < 0) //solo < non <= (ad es se il valore del semaforo è -1 , emtra nell'if ma NON DECREMENTA, ed è per questo che decremento subito all'inizio)
+    if (*semAdd == 0) //solo < non <= (ad es se il valore del semaforo è -1 , emtra nell'if ma NON DECREMENTA, ed è per questo che decremento subito all'inizio)
     { //se invece fosse stato un numero positivo ad es 1, decremento diventa 0,e non è bloccante quindi non entra nemmano nell'if, e il processo continua la sua esecuzione normalmente.
         // Istruzioni per SYSCALL bloccanti
         current_process->p_s = *excState;
@@ -180,35 +186,30 @@ void NSYS3(state_t *excState)
         }
         scheduler();
     }
-   /* else
+    else
     {
         // Non è bloccante
         (*semAdd)--; 
-    }*/  //questa non serve, perche il decremento del semaforo lo facciamo prima del controllo
+    }  //questa non serve, perche il decremento del semaforo lo facciamo prima del controllo
 }
 
 // Verhogen
 void NSYS4(state_t *excState) //l'errore qui è che se il valore del semaforo fosse negativo, allora devo bloccare il processo che sta facendo la V() , MA QUI NON INCREM
 {
     int *semAdd = (int *)excState->reg_a1;
-    
-    // 1. Incremento del valore del semaforo
-    (*semAdd)++;
-    
-    // 2. Se dopo l'incremento il valore è <= 0, c'era qualcuno bloccato
-    if (*semAdd <= 0) 
+     
+    if (headBlocked(semAdd) != NULL) 
     {
-        pcb_t *p = removeBlocked(semAdd);
+        insertProcQ(&ready_queue, removeBlocked(semAdd));
         
-        if (p != NULL) 
+        if (isDeviceSemaphore(semAdd)) 
         {
-            insertProcQ(&ready_queue, p);
-            
-            if (isDeviceSemaphore(semAdd)) 
-            {
-                soft_block_counter--;
-            }
+            soft_block_counter--;
         }
+    }
+    else 
+    {
+        (*semAdd)++;
     }
 }
 
@@ -239,9 +240,10 @@ void NSYS5(state_t *excState)
     // - commandAddr - START_DEVREG = ottengo un offset da cui posso ottenere l'indice del device, dividendolo
     //                                per lo spazio di memoria occupato da un device.
     // ogni device è grande 16 bit
-    int *indirizzoa1 = (int *)excState->reg_a1;
-    int indirizzoa_2 = (int)excState->reg_a2;
-    *indirizzoa1 = indirizzoa_2;
+    int commandValue = (int)excState->reg_a2;         // Valore del comando da scrivere
+    
+    // Scrive il comando al command field del device
+    *((int*)commandAddr) = commandValue;
 
     int devIndex = (commandAddr - START_DEVREG) / 0x10;
     int offset = (commandAddr - START_DEVREG) % 0x10;
@@ -345,22 +347,23 @@ void NSYS10(state_t *excState)
 void syscall_exception_handler(state_t *excState)
 {
     int isBlocking = FALSE;
+    int syscallNum = (int)excState->reg_a0;
     unsigned int previousMode = (excState->status & MSTATUS_MPP_MASK);
 
     // Simula un Program Trap per istruzione privilegiata
-    if (excState->reg_a0 < 0 && previousMode != MSTATUS_MPP_M)
+    if (syscallNum < 0 && previousMode != MSTATUS_MPP_M)
     {
         excState->cause = PRIVINSTR;
         trap_exception_handler(excState); // Passa il controllo al gestore dei Trap
         return;
     }
     // Controllo istruzione in kernel mode
-    if (excState->reg_a0 < 0 && previousMode == MSTATUS_MPP_M)
+    if (syscallNum < 0 && previousMode == MSTATUS_MPP_M)
     {
         // Avanzo nel program counter di una word esplicitamente
         excState->pc_epc += 4;
 
-        switch (excState->reg_a0)
+        switch (syscallNum)
         {
         case CREATEPROCESS:
             NSYS1(excState);
@@ -373,8 +376,8 @@ void syscall_exception_handler(state_t *excState)
 
         case PASSEREN: // caso speciale, perche puo essere sia bloccante che non.
             // È bloc sse il semVal alla chiamata è 0 o minore
-            //int *semAdd = (int *)excState->reg_a1;
-            //isBlocking = *semAdd <= 0;
+            int *semAdd = (int *)excState->reg_a1;
+            isBlocking = *semAdd == 0;
             //inutili ormai qui perche il controllo di isBlocking lo facciamo direttamente dentro NSYS3
             //qui *semAdd è ancora il valore del semaforo prima della P(), perche il decremento lo facciamo all'inizio di NSYS3, quindi se è 0 o minore, allora è bloccante, altrimenti no. Se facessi il controllo prima, non riuscirei a distinguere tra i due casi.
             NSYS3(excState);
@@ -424,6 +427,12 @@ void syscall_exception_handler(state_t *excState)
 }
 
 void trap_exception_handler(state_t *excState);
+
+void trap_exception_handler(state_t *excState)
+{
+    (void)excState;
+    passUpOrDie(GENERALEXCEPT);
+}
 
 void passUpOrDie(int except_index)
 {

@@ -6,7 +6,7 @@ int soft_block_counter; // waiting process
 struct list_head ready_queue;
 pcb_t *current_process;
 int device_semaphores[SEMDEVLEN];
-extern void uTLB_RefillHandler;
+extern void uTLB_RefillHandler(void);
 
 void* memcpy(void *dest, const void *src, unsigned int len)
 {
@@ -20,7 +20,7 @@ void* memcpy(void *dest, const void *src, unsigned int len)
 
 void populate_puv(passupvector_t *puv)
 {                                                          // se la cpu non trova un indirizzo in memoria (TLB Refill), va a leggere questa istruzione d
-    puv->tlb_refill_handler = (memaddr)&uTLB_RefillHandler; // tlb_refill_events_handler(); // puv è un puntatore alla passupvector, tlb_refill_handler è un campo della passupvector che contiene l'indirizzo della funzione da chiamare in caso di TLB Refill, uTLB_RefillHandler è la funzione che gestisce il TLB Refill
+    puv->tlb_refill_handler = (memaddr)uTLB_RefillHandler; // tlb_refill_events_handler(); // puv è un puntatore alla passupvector, tlb_refill_handler è un campo della passupvector che contiene l'indirizzo della funzione da chiamare in caso di TLB Refill, uTLB_RefillHandler è la funzione che gestisce il TLB Refill
 }
 
 void set_sp_tlb_refill(passupvector_t *puv)
