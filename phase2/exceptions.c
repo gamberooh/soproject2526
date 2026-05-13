@@ -1,9 +1,7 @@
 #include "./headers/exceptions.h"
 #include <uriscv/types.h>
 
-/* Private Check methods */
-
-void klog_print(char* str);
+/* Metodi di controllo privati */
 
 int __CAUSE_IS_TLB__(unsigned int causeCode)
 {
@@ -18,14 +16,14 @@ int __CAUSE_IS_SYSCALL__(unsigned int causeCode)
 int __CAUSE_IS_TRAP__(unsigned int causeCode)
 {
   return (
-    (causeCode >= EXC_IAM && causeCode <= EXC_SAF) ||  // 0-7
-    causeCode == EXC_ECS ||                              // 9
-    causeCode == PRIVINSTR ||                            // 10 
-    (causeCode >= EXC_IPF && causeCode < EXC_MOD)           // 12-23
+    (causeCode >= EXC_IAM && causeCode <= EXC_SAF) ||
+    causeCode == EXC_ECS ||                 
+    causeCode == PRIVINSTR ||                     
+    (causeCode >= EXC_IPF && causeCode < EXC_MOD)
     );
 }
 
-/* Helper functions*/
+/* Funzioni ausiliarie */
 
 int isDeviceSemaphore(int *semAddr)
 {
@@ -46,17 +44,15 @@ pcb_t *getRoot(pcb_t *current)
 
 pcb_t *findByPid(pcb_t *root, int pid)
 {
+    // Visita preordine a partire dalla radice dell'albero dei processi
     if (root == NULL)
-    {
         return NULL;
-    }
     else if (root->p_pid == pid)
-    {
         return root;
-    }
     else
     {
         struct list_head *iter;
+        // Itero su tutti i figli del pcb passato in input
         list_for_each(iter, &root->p_child)
         {
             pcb_t *child = container_of(iter, pcb_t, p_sib);
@@ -64,9 +60,7 @@ pcb_t *findByPid(pcb_t *root, int pid)
 
             // Se trovato nel sotto-albero, lo propaghiamo verso l'alto
             if (found != NULL)
-            {
-                return found;
-            }
+                return found; 
         }
         return NULL;
     }
@@ -83,11 +77,10 @@ void killProgeny(pcb_t *term)
 
     if (term->p_semAdd != NULL)
     {
-        int *semAddr = term->p_semAdd; // salvo prima l'indirizzo del semaforo qui, perche outBlocked mette a NULL il p_semAdd del processo term. mi serve dunque per il controllo di isDeviceSemaphore dopo outBlocked.
-        // bloccato in attesa di un sem
+        // Tolgo il processo da terminare dalla lista
+        // dei bloccati del semaforo su cui era bloccato per richiedere una risorsa
+        int *semAddr = term->p_semAdd;
         outBlocked(term);
-        // Compensa la P gia' effettuata dal processo terminato su quel semaforo.
-        // Senza questo riallineamento il semaforo resta troppo negativo.
         
         if (isDeviceSemaphore(semAddr))
             soft_block_counter--;
@@ -116,14 +109,13 @@ void NSYS1(state_t *excState)
     pcb_t *newPcb = allocPcb();
 
     if (newPcb == NULL)
-    {
         excState->reg_a0 = CREATEPROCESS;
-    }
     else
     {
         newPcb->p_s = *newState;
         newPcb->p_prio = prio;
         newPcb->p_supportStruct = supportLevel;
+        // Annullo manualmente i campi che devono essere nulli
         newPcb->p_time = 0;
         newPcb->p_semAdd = NULL;
         insertProcQ(&ready_queue, newPcb);
@@ -141,20 +133,16 @@ void NSYS2(state_t *excState)
     pcb_t *term = NULL;
 
     if (pid == 0)
-    {
         term = current_process;
-    }
     else
-    {
         // Cerco il pcb partendo dalla radice (init)
         term = findByPid(getRoot(current_process), pid);
-    }
-    // terminazione processo
+    
+    // Terminazione processo
     if (term != NULL)
     {
-        // stacco il processo term dall'albero dei processi creando un'isola che non ha
-        // dipendenze da processi attivi.
-        // cosicché
+        // stacco il processo term dall'albero dei processi creando
+        // un'isola di processi che non ha dipendenze da quelli attivi.
         outChild(term);
         killProgeny(term);
     }
@@ -165,10 +153,9 @@ void NSYS2(state_t *excState)
 void NSYS3(state_t *excState)
 {
     int *semAdd = (int*)excState->reg_a1;
-    //CORREZIONE ZIZO
-    if (*semAdd == 0) //solo < non <= (ad es se il valore del semaforo è -1 , emtra nell'if ma NON DECREMENTA, ed è per questo che decremento subito all'inizio)
-    { //se invece fosse stato un numero positivo ad es 1, decremento diventa 0,e non è bloccante quindi non entra nemmano nell'if, e il processo continua la sua esecuzione normalmente.
-        // Istruzioni per SYSCALL bloccanti
+
+    if (*semAdd == 0)
+    {
         current_process->p_s = *excState;
 
         if (insertBlocked(semAdd, current_process))
@@ -190,11 +177,11 @@ void NSYS3(state_t *excState)
     {
         // Non è bloccante
         (*semAdd)--; 
-    }  //questa non serve, perche il decremento del semaforo lo facciamo prima del controllo
+    }
 }
 
 // Verhogen
-void NSYS4(state_t *excState) //l'errore qui è che se il valore del semaforo fosse negativo, allora devo bloccare il processo che sta facendo la V() , MA QUI NON INCREM
+void NSYS4(state_t *excState) 
 {
     int *semAdd = (int *)excState->reg_a1;
      
@@ -213,22 +200,6 @@ void NSYS4(state_t *excState) //l'errore qui è che se il valore del semaforo fo
     }
 }
 
-   /* if (headBlocked(semAdd) == NULL)
-    {
-        stepV();
-        (*semAdd)++;
-        klog_print("Incremento val sem");
-    }
-    else
-    {
-        insertProcQ(&ready_queue, removeBlocked(semAdd)); // il processo appena liberato, va in ready queue
-        if (isDeviceSemaphore(semAdd))
-        {
-            // klog_print("Sblocco processo");
-            soft_block_counter--;
-        }
-    }*/
-
 
 // DoIO
 void NSYS5(state_t *excState)
@@ -240,9 +211,8 @@ void NSYS5(state_t *excState)
     // - commandAddr - START_DEVREG = ottengo un offset da cui posso ottenere l'indice del device, dividendolo
     //                                per lo spazio di memoria occupato da un device.
     // ogni device è grande 16 bit
-    int commandValue = (int)excState->reg_a2;         // Valore del comando da scrivere
+    int commandValue = (int)excState->reg_a2;
     
-    // Scrive il comando al command field del device
     *((int*)commandAddr) = commandValue;
 
     int devIndex = (commandAddr - START_DEVREG) / 0x10;
@@ -267,41 +237,29 @@ void NSYS5(state_t *excState)
     }
     // Passo l'indirizzo di memoria dove è salvato il val del semaforo
     excState->reg_a1 = (memaddr) &device_semaphores[semIndex];
-    NSYS3(excState); // faccio la p sul semaforo indicato dal cont. del registro a1
-    // soft_block_counter++;
-
-    // if (IS_TERMINAL(devIndex))
-    /* {
-         if(IS_TERMINAL_RX(devIndex)) {
-
-         }
-
-         else if (IS_TERMINAL_TX(devIndex)) {
-
-         }
-
-     }*/
-
-    // Quando il sub device (del terminal) lancia un interrupt, il nucleo fa una V() sul sotto-device dedicato
+    // assegno la risorsa o blocco il processo su quel semaforo
+    NSYS3(excState);
 }
 
-// (a0 -> nSyscall, a1 -> reg generale, a2, a3)
 // GetCPUTime
 void NSYS6(state_t *excState)
 {
-    excState->reg_a0 = (unsigned int)current_process->p_time; // dato che ho aggiornato il tempo di CPU in updateCPUTime all'inizio di exception_handler, posso semplicemente restituire il tempo di CPU del processo corrente sneza fare calcoli aggiuntivi.
-};
+    // non aggiorno qui il tempo perché lo faccio ogni volta
+    // all'interno del exception handler
+    excState->reg_a0 = (unsigned int)current_process->p_time;
+}
 
 // WaitForClock
 void NSYS7(state_t *excState)
 {
-    int *semAdd = &device_semaphores[SEM_PSEUDOCLOCK]; // SEM_PSEUDOCLOCK è l'indice del semaforo associato al clock(100ms)
-    current_process->p_s = *excState;                  // salvo lo stato del processo prima di bloccarlo
+    int *semAdd = &device_semaphores[SEM_PSEUDOCLOCK];
+    current_process->p_s = *excState;
+    // Se fallisce l'inserimento il controllo passa a passupordie
     if (insertBlocked(semAdd, current_process))
     {
         passUpOrDie(GENERALEXCEPT);
         return;
-    } // insertBlocked da false se l'inserimento va bene, True se ce errore (es ASL piena)
+    }
     soft_block_counter++;
     scheduler();
 };
@@ -309,29 +267,21 @@ void NSYS7(state_t *excState)
 // GetSupportData
 void NSYS8(state_t *excState)
 {
-    // prendo il valore del support struct pointer del processo corrente e lo restituisco nel registro a0. se il puntatore è NULL, restituisco 0
-    excState->reg_a0 = (unsigned int)current_process->p_supportStruct;
+    excState->reg_a0 = (memaddr)current_process->p_supportStruct;
 };
 
 // GetProcessID
 void NSYS9(state_t *excState)
 {
-    // se il parametro a1 è 0, restituisco il pid del processo corrente, altrimenti restituisco il pid del padre
     int parent = (int)excState->reg_a1;
     if (parent == 0)
-    {
         excState->reg_a0 = current_process->p_pid;
-    }
     else
     {
-        if (current_process->p_parent == NULL) // caso in cui il processo corrente sia il processo root
-        {
+        if (current_process->p_parent == NULL) // root
             excState->reg_a0 = 0;
-        }
         else
-        {
             excState->reg_a0 = current_process->p_parent->p_pid;
-        }
     }
 };
 
@@ -339,7 +289,9 @@ void NSYS9(state_t *excState)
 void NSYS10(state_t *excState)
 {
     // il processo che la chiama cede il posto nella cpu e va in fondo alla ready_queue
-    current_process->p_s = *excState; // salvo lo stato del processo prima di cederlo
+    current_process->p_s = *excState;
+    // lo mettiamo a priorità min per avere la sicurezza di metterlo in coda
+    current_process->p_prio = PROCESS_PRIO_LOW;
     insertProcQ(&ready_queue, current_process);
     scheduler();
 };
@@ -375,11 +327,8 @@ void syscall_exception_handler(state_t *excState)
             break;
 
         case PASSEREN: // caso speciale, perche puo essere sia bloccante che non.
-            // È bloc sse il semVal alla chiamata è 0 o minore
             int *semAdd = (int *)excState->reg_a1;
             isBlocking = *semAdd == 0;
-            //inutili ormai qui perche il controllo di isBlocking lo facciamo direttamente dentro NSYS3
-            //qui *semAdd è ancora il valore del semaforo prima della P(), perche il decremento lo facciamo all'inizio di NSYS3, quindi se è 0 o minore, allora è bloccante, altrimenti no. Se facessi il controllo prima, non riuscirei a distinguere tra i due casi.
             NSYS3(excState);
             break;
 
@@ -419,10 +368,13 @@ void syscall_exception_handler(state_t *excState)
 
         if (!isBlocking)
         {
-            // SOLO PER LE SYSCALL NON BLOCCANTI, per quelle bloccanti il passaggio allo scheduler avviene all'interno della syscall stessa, dopo aver inserito il processo nella ASL
-            current_process->p_s = *excState; // aggiorno lo stato del processo corrente(questo vale per le chiamate NON BLOCCANTI che non fanno passare il controllo allo scheduler)
-            LDST(&current_process->p_s);      // ricarico lo stato del processo corrente
+            // Aggiorno lo stato del processo corrente
+            current_process->p_s = *excState;
+            LDST(&current_process->p_s);
         }
+
+        // nel caso bloccante, al termine della funzione viene sempre lanciato lo scheduler
+        // che gestirà il continuo del ciclo di vita del processo.
     }
 }
 
@@ -436,9 +388,8 @@ void passUpOrDie(int except_index)
 {
     if (current_process->p_supportStruct == NULL)
     {
-        /* Termina il processo corrente e la sua progenie */
         state_t termState;
-        termState.reg_a1 = 0; /* PID 0 indica il processo corrente */
+        termState.reg_a1 = 0; /* PID 0 -> corrente */
         NSYS2(&termState);
     }
     else
@@ -460,7 +411,6 @@ void exception_handler()
     state_t *excState = GET_EXCEPTION_STATE_PTR(0);
     unsigned int excCause = excState->cause;
 
-    /* 1. Gestione Interrupt (priorità massima) */
     if (CAUSE_IS_INT(excCause))
     {
         handleInterrupt();
@@ -471,21 +421,18 @@ void exception_handler()
     unsigned int excCode = (getCAUSE() & CAUSE_EXCCODE_MASK);
 
 
-    /* 2. TLB Exceptions (24-28) */
     if (__CAUSE_IS_TLB__(excCode))
     {
         passUpOrDie(PGFAULTEXCEPT);
         return;
     }
 
-    /* 3. SYSCALL Exceptions (8) */
     if (__CAUSE_IS_SYSCALL__(excCode))
     {
         syscall_exception_handler(excState);
         return;
     }
 
-    /* 4. Trap */
     if (__CAUSE_IS_TRAP__(excCode))
     {
         passUpOrDie(GENERALEXCEPT);

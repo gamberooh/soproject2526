@@ -1,40 +1,6 @@
 #include "./headers/initial.h"
 unsigned int bitmap_value;
 int DevNo;
-int IS_DISK(unsigned int id)
-{
-    return id >= SEM_DISK_0 && id <= SEM_DISK_7;
-}
-
-int IS_FLASH(unsigned int id)
-{
-    return id >= SEM_FLASH_0 && id <= SEM_FLASH_7;
-}
-
-int IS_ETHERNET(unsigned int id)
-{
-    return id >= SEM_ETHERNET_0 && id <= SEM_ETHERNET_7;
-}
-
-int IS_PRINTER(unsigned int id)
-{
-    return id >= SEM_PRINTER_0 && id <= SEM_PRINTER_7;
-}
-
-int IS_TERMINAL_RX(unsigned int id)
-{
-    return id >= SEM_TERM_RX_0 && id <= SEM_TERM_RX_7;
-}
-
-int IS_TERMINAL_TX(unsigned int id)
-{
-    return id >= SEM_TERM_TX_0 && id <= SEM_TERM_TX_7;
-}
-
-int IS_TERMINAL(unsigned int id)
-{
-    return id >= SEM_TERM_START && id <= SEM_TERM_END;
-}
 
 void handleInterrupt()
 {
@@ -72,7 +38,7 @@ void handleInterrupt()
 
     unsigned int word;
     /* Calcolo l'indirizzo fisico in memoria della Interrupting Devices Bit Map relativa
-    alla linea di interrupt (IntlineNo) interessata*/
+    alla IntlineNo interessata*/
     switch (IntlineNo - 3)
     {
     case 0:
@@ -94,14 +60,14 @@ void handleInterrupt()
         break;
     }
 
-    if (IntlineNo == 1) // 7.2 Processor Local Timer (PLT) Interrupts
+    if (IntlineNo == 1)
     {
         setTIMER(TIMESLICE * (*((cpu_t *)TIMESCALEADDR)));
         current_process->p_s = *((state_t *)GET_EXCEPTION_STATE_PTR(0));
         insertProcQ(&ready_queue, current_process);
         scheduler();
     }
-    else if (IntlineNo == 2) // 7.3 System-wide Interval Timer (Pseudo-clock)
+    else if (IntlineNo == 2)
     {
         LDIT(PSECOND);
 
@@ -121,9 +87,9 @@ void handleInterrupt()
     }
     else if (IntlineNo >= 3 && IntlineNo <= 7)
     {
-        // 7.1 Non-Timer Interrupts
-        /* ispeziona la parola estratta per trovare quale singolo bit è acceso a 1, restituendo
-    l'indice di quel bit, ovvero il numero del dispositivo (da 0 a 7) che ha generato l'interrupt*/
+        /* ispeziona la parola estratta per trovare quale singolo bit è acceso a 1,
+        restituendo l'indice di quel bit, ovvero il numero del dispositivo
+        (da 0 a 7) che ha generato l'interrupt*/
         bitmap_value = *((unsigned int *)word);
         DevNo = -1;
 
@@ -144,7 +110,7 @@ void handleInterrupt()
         else if (bitmap_value & DEV7ON)
             DevNo = 7;
 
-        // Calcolo the starting address of the device’s device register
+        // Calcolo l'indirizzo di partenza del device register relativo al device a cui sto accedendo
         unsigned int devAddrBase = 0x10000054 + ((IntlineNo - 3) * 0x80) + (DevNo * 0x10);
         unsigned int status;
         int semIndex;
@@ -157,8 +123,8 @@ void handleInterrupt()
             status = device_reg->status;
             device_reg->command = ACK;
             semIndex = (IntlineNo - 3) * DEVPERINT + DevNo;
-        }
-        else if (IntlineNo == 7)
+        }    
+        else if (IntlineNo == 7) // Terminali
         {
             termreg_t *term_reg = (termreg_t *)devAddrBase;
             unsigned int tx_status_code = term_reg->transm_status & 0xFF;
@@ -175,7 +141,8 @@ void handleInterrupt()
                 semIndex = SEM_TERM_RX_0 + DevNo;
             }
         }
-
+        // Eseguo la V senza usare la syscall in modo da
+        // avere restituito il puntatore a unblocked_pcb
         int *semaddr = &device_semaphores[semIndex];
         pcb_t *unblocked_pcb = removeBlocked(semaddr);
         if (unblocked_pcb != NULL)

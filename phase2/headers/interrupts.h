@@ -5,6 +5,8 @@
 #include <uriscv/liburiscv.h>
 #include <uriscv/cpu.h>
 
+/* Indici di accesso ai semafori*/
+
 /* --- Pseudo-clock --- */
 #define SEM_PSEUDOCLOCK 0
 
@@ -73,22 +75,6 @@
 
 #define SEM_TERM_START 33
 #define SEM_TERM_END 48
-
-int IS_GENERAL(unsigned int id);
-
-int IS_DISK(unsigned int id);
-
-int IS_FLASH(unsigned int id);
-
-int IS_ETHERNET(unsigned int id);
-
-int IS_PRINTER(unsigned int id);
-
-int IS_TERMINAL_RX(unsigned int id);
-
-int IS_TERMINAL_TX(unsigned int id);
-
-int IS_TERMINAL(unsigned int id);
 
 void handleInterrupt();
 

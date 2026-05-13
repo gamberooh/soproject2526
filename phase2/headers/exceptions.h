@@ -1,23 +1,8 @@
 #include "initial.h"
 #include <uriscv/types.h>
 
-/**
- *  TLB, Program Trap, and SYSCALL exception handlers.
- *  Furthermore, this module will contain the provided
- *  skeleton TLB-Refill event handler
- *  (e.g. uTLB_RefillHandler).
- */
+/* PASSUPORDIE */
 
-int __CAUSE_IS_TLB__(unsigned int cause);
-
-int __CAUSE_IS_SYSCALL__(unsigned int cause);
-
-int __CAUSE_IS_TRAP__(unsigned int cause);
-
-/* Helper functions*/
-pcb_t* getRoot(pcb_t* current);
-pcb_t* findByPid(pcb_t* root, int pid);
-void killProgeny(pcb_t* term);
 void passUpOrDie(int except_index);
 
 /* SYCALLs */
