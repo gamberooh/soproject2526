@@ -87,6 +87,7 @@ int main()
     populate_puv(puv);
     set_sp_tlb_refill(puv);
     connect_exception_handler(puv);
+    init_data_structures();
     init_global_vars();
     load_interval_time(devregarea);
     init_new_proc();
