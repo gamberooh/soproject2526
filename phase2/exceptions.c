@@ -116,8 +116,8 @@ void NSYS1(state_t *excState)
         newPcb->p_prio = prio;
         newPcb->p_supportStruct = supportLevel;
         // Annullo manualmente i campi che devono essere nulli
-        newPcb->p_time = 0;
-        newPcb->p_semAdd = NULL;
+        //newPcb->p_time = 0; da annullare, lo fa gia allocPcb
+        //newPcb->p_semAdd = NULL; da annullare , lo fa gia allocPcb
         insertProcQ(&ready_queue, newPcb);
         insertChild(current_process, newPcb);
         process_counter++;
@@ -376,6 +376,11 @@ void syscall_exception_handler(state_t *excState)
         // nel caso bloccante, al termine della funzione viene sempre lanciato lo scheduler
         // che gestirà il continuo del ciclo di vita del processo.
     }
+     if (syscallNum >= 0)
+    {
+        // Codici SYSCALL positivi (SYS1..SYSn degli U-proc, Fase 3). richiesta dal prof.
+        passUpOrDie(GENERALEXCEPT);
+    }
 }
 
 void trap_exception_handler(state_t *excState)
@@ -437,5 +442,22 @@ void exception_handler()
     {
         passUpOrDie(GENERALEXCEPT);
         return;
-    } 
+    }
+}
+
+/* Vero TLB-Refill event handler (Fase 3, sez. 3 delle specifiche). */
+void uTLB_RefillHandler(void)
+{
+    state_t *savedState = (state_t *)GET_EXCEPTION_STATE_PTR(0);// salvo lo stato del processo corrente al momento dell'eccezione TLB-Refill. quello (0) è l'indice della tabella delle eccezioni del BIOS, che contiene lo stato del processo al momento dell'eccezione. 
+    /* NB: niente maschera GETPAGENO prima dello shift, taglierebbe via il bit 31
+     * (sempre acceso per gli indirizzi kuseg) azzerando il VPN.  */
+    unsigned int vpn = savedState->entry_hi >> VPNSHIFT; //entry_hi contiene l'indirizzo virtuale del pezzo che serviva .ricava l'indirizzo virtuale della pagina che ha causato l'eccezione TLB-Refill, spostando a destra di VPNSHIFT bit  il valore del registro entry_hi salvato nello stato del processo. Questo permette di ottenere il numero di pagina virtuale (VPN) corrispondente all'indirizzo che ha causato l'eccezione.
+    int idx = (vpn == 0xBFFFF) ? (USERPGTBLSIZE - 1) : (int)(vpn - (KUSEG >> VPNSHIFT)); //se vpn è uguale a 0xBFFFF (che rappresenta l'ultimo indirizzo della zona utente), allora idx viene impostato a USERPGTBLSIZE - 1, altrimenti idx viene calcolato come vpn meno KUSEG >> VPNSHIFT. Questo calcolo determina l'indice della tabella delle pagine utente corrispondente alla pagina virtuale che ha causato l'eccezione TLB-Refill.
+    pteEntry_t *pte = &current_process->p_supportStruct->sup_privatePgTbl[idx]; // va a auardare, nella tabella della pagina del processo corrente, cosa ce scritto per quella pagina specifica- presente o assente, e se presente, quale sia l'indirizzo fisico corrispondente.
+
+    setENTRYHI(pte->pte_entryHI);//copia il valore del campo pte_entryHI della voce della tabella delle pagine corrispondente alla pagina virtuale che ha causato l'eccezione TLB-Refill nel registro ENTRYHI, che viene utilizzato per la gestione della TLB.
+    setENTRYLO(pte->pte_entryLO);//copia il valore del campo pte_entryLO della voce della tabella delle pagine corrispondente alla pagina virtuale che ha causato l'eccezione TLB-Refill nel registro ENTRYLO, che viene utilizzato per la gestione della TLB.
+    TLBWR(); // scrive la voce della tabella delle pagine appena caricata nei registri ENTRYHI e ENTRYLO nella TLB. 
+
+    LDST(savedState);
 }

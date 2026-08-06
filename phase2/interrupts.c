@@ -122,13 +122,13 @@ void handleInterrupt()
             dtpreg_t *device_reg = (dtpreg_t *)devAddrBase;
             status = device_reg->status;
             device_reg->command = ACK;
-            semIndex = (IntlineNo - 3) * DEVPERINT + DevNo;
+            semIndex = (IntlineNo - 3) * DEVPERINT + DevNo+1; // +1 giustificato dalla scelta di mettere pseudoclock per primo (0)
         }    
         else if (IntlineNo == 7) // Terminali
         {
             termreg_t *term_reg = (termreg_t *)devAddrBase;
             unsigned int tx_status_code = term_reg->transm_status & 0xFF;
-            if (tx_status_code != READY && tx_status_code != BUSY)
+             if (tx_status_code == OKCHARTRANS) //modifica richiesta dal prof
             {
                 status = term_reg->transm_status;
                 term_reg->transm_command = ACK;

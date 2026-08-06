@@ -22,6 +22,9 @@ void NSYS10(state_t* excState);
 
 void myTlbRefillHandler(void);
 
+/* Vero TLB-Refill event handler di Fase 3 */
+void uTLB_RefillHandler(void);
+
 void syscall_exception_handler(state_t* mode);
 
 void trap_exception_handler(state_t *excState);

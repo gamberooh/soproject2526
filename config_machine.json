@@ -6,6 +6,38 @@
     "bootstrap-rom": "/usr/local/share/uriscv/coreboot.rom.uriscv",
     "clock-rate": 1,
     "devices": {
+        "flash0": {
+            "enabled": true,
+            "file": "testers/shell.uriscv"
+        },
+        "flash1": {
+            "enabled": true,
+            "file": "testers/date.uriscv"
+        },
+        "flash2": {
+            "enabled": true,
+            "file": "testers/echo.uriscv"
+        },
+        "flash3": {
+            "enabled": true,
+            "file": "testers/fibEight.uriscv"
+        },
+        "flash4": {
+            "enabled": true,
+            "file": "testers/fibEleven.uriscv"
+        },
+        "flash5": {
+            "enabled": true,
+            "file": "testers/uname.uriscv"
+        },
+        "flash6": {
+            "enabled": true,
+            "file": "testers/calc.uriscv"
+        },
+        "flash7": {
+            "enabled": true,
+            "file": "testers/sl.uriscv"
+        },
         "terminal0": {
             "enabled": true,
             "file": "term0.uriscv"
@@ -13,7 +45,7 @@
     },
     "execution-rom": "/usr/local/share/uriscv/exec.rom.uriscv",
     "num-processors": 1,
-    "num-ram-frames": 64,
+    "num-ram-frames": 256,
     "symbol-table": {
         "asid": 64,
         "file": "build/MultiPandOS.stab.uriscv"
