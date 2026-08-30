@@ -96,16 +96,16 @@ void test(void) {
     initDeviceMutex(); 
     initSwapStructs(); // frame swap pool & frame RAM = 0
 
-    masterSemaphore = 0; //serve a far aspettare il processo master (test()) finche non termina la shell
-    shellSemaphore  = 0; //serve a far aspettare la shell quando lancia un programma con essa(finche non termina il programma). quando il programma termina, viene fatta una V() sul semaforo della shell, che quindi riprende l'esecuzione
- 
-    shellSupp = allocSupportStruct();// alloca un support_t dalla lista suppStructFree_h, rimuovendolo dalla lista e restituendolo. se la lista e' vuota, restituisce NULL
-    initUprocSupport(shellSupp, 1); // inizializza la support structure per il processo shell, impostando i campi sup_asid, sup_exceptContext e sup_privatePgTbl. 1 è l'ASID del processo shell 
-    initUprocState(&shellState, 1); 
+    masterSemaphore = 0; // test rimane in waiting finché shell non rilascia la risorsa.
+    shellSemaphore  = 0; // shell rimane in waiting finché un programma di test non termina.
+    int SHELL_ASID = 1;
+    shellSupp = allocSupportStruct();
+    initUprocSupport(shellSupp, SHELL_ASID); 
+    initUprocState(&shellState, SHELL_ASID); 
 
-    SYSCALL(CREATEPROCESS, (int)&shellState, PROCESS_PRIO_LOW, (int)shellSupp); //crea il processo shell, passando lo stato del processo shell, la priorità del processo shell e la support structure del processo shell. Il sistema operativo crea il processo shell e lo mette nella coda dei processi pronti.
+    SYSCALL(CREATEPROCESS, (int)&shellState, PROCESS_PRIO_LOW, (int)shellSupp); //crea il processo shell
 
-    SYSCALL(PASSEREN, (int)&masterSemaphore, 0, 0); //  fa aspettare il processo master (test()) finche non termina la shell. Quando la shell termina, viene fatta una V() sul semaforo masterSemaphore, che quindi riprende l'esecuzione del processo master (test()).
+    SYSCALL(PASSEREN, (int)&masterSemaphore, 0, 0); // test si mette in attesa della terminazione del processo shell
 
-    SYSCALL(TERMPROCESS, 0, 0, 0); // termina il processo master (test()), che quindi non puo' piu' eseguire alcuna istruzione. Il sistema operativo libera tutte le risorse allocate al processo master (test()) e lo rimuove dalla coda dei processi pronti.
+    SYSCALL(TERMPROCESS, 0, 0, 0);
 }
