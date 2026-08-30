@@ -6,29 +6,30 @@
 #include <uriscv/types.h>
 
 /* Indirizzo di partenza della Swap Pool: subito dopo le prime OSFRAMES frame di RAM,
- * stimate sufficienti per codice OS + stack di test (sez. 4.1 delle specifiche). */
+ * stimate sufficienti per codice OS + stack di test */
 #define SWAPPOOLSTART (RAMSTART + (OSFRAMES * PAGESIZE))
 
 /* Indirizzo del device register di un flash device (stessa formula di phase2/interrupts.c
  * per IntlineNo=4, senza toccare quel file: START_DEVREG + (IntlineNo-3)*0x80 + devNo*0x10). */
 //MACRO SOLO PER I FLASH DEVICE, NON PER TUTTI I DEVICE, PER QUESTO NON CE intline-3. 0x80 mi serve per saltare direttamente alla zona dei flash device, che sono 8 e partono da IntlineNo=4. Quindi IntlineNo-3 = 1, e 1*0x80 = 0x80. Poi aggiungo devNo*0x10 per saltare al registro del flash device corrispondente all'ASID dell'U-proc.
 #define FLASHDEVADDR(devNo) (START_DEVREG + 0x80 + ((devNo) * 0x10))
-//il device register di un flash contiene 4 registri: command, status, data0 e data1.  
+// il device register di un flash contiene 4 registri: command, status, data0 e data1.  
 /* Swap Pool Table: locale al modulo, come richiesto in sez. 12.2 delle specifiche. */
 static swap_t swapPoolTable[POOLSIZE]; // 16 caselle di swapool in memoria
-static int    swapPoolSem; // semaforo per l'accesso alla swap pool
+static int    swapPoolSem; // sem per accesso mutex alla swap pool table
 static int    nextVictimFrame; /* puntatore FIFO round-robin (sez. 5.4) */
 
-//funzione che segna tutti i frame della swap pool come liberi
+// Init: frame swap pool liberi
 void initSwapStructs(void) {
     for (int i = 0; i < POOLSIZE; i++) {
-        swapPoolTable[i].sw_asid   = -1; /* frame libero.  */
-        swapPoolTable[i].sw_pageNo = 0;//sw_pageNo è il numero di pagina virtuale del frame, inizializzato a 0
-        swapPoolTable[i].sw_pte    = NULL; //sw_pte è un puntatore alla riga della page table che punta a questo frame, inizializzato a NULL
+        swapPoolTable[i].sw_asid   = -1; // frame liberi
+        swapPoolTable[i].sw_pageNo = 0; // vpn
+        swapPoolTable[i].sw_pte    = NULL;
     }
-    swapPoolSem     = 1; //semaforo per l'accesso alla swap pool, inizializzato a 1 (libero)
-    nextVictimFrame = 0; //puntatore al prossimo frame da sostituire, inizializzato a 0 (primo frame della swap pool)
+    swapPoolSem     = 1;
+    nextVictimFrame = 0;
 }
+
 //funzione che libera i frame della swap pool occupati da un processo utente con un dato ASID
 void freeUprocFrames(int asid) {
     SYSCALL(PASSEREN, (int)&swapPoolSem, 0, 0);
@@ -39,7 +40,7 @@ void freeUprocFrames(int asid) {
             swapPoolTable[i].sw_pte    = NULL;
         }
     }
-    SYSCALL(VERHOGEN, (int)&swapPoolSem, 0, 0);
+    SYSCALL(VERHOGEN, (int)&swapPoolSem, 0, 0); // libero mutex
 }
 
 static int pickFrame(void) {

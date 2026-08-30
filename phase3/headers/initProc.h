@@ -10,7 +10,6 @@ extern int flashMutex[UPROCMAX];
 extern int termReadMutex;
 extern int termWriteMutex;
 
-/* Pool di Support Structure (free-list, stesso pattern di fase 1 pcb.c) */
 void           initSupportStructs(void);
 support_t     *allocSupportStruct(void);
 void           freeSupportStruct(support_t *s);

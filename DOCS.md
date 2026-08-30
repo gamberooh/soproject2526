@@ -333,6 +333,41 @@ Questo metodo gestisce gli interrupt hardware, ovvero I/O, PLT e Interval Timer.
     3. Posiziona il codice di stato salvato nel registro **`a0`** del processo appena sbloccato e lo inserisce nella *Ready Queue*.
     4. Restituisce il controllo al processo corrente tramite **`LDST`**, oppure chiama lo Scheduler se non c'è alcun processo in esecuzione.
 
-### **`passUpOrDie(except_index)`**
-
+### **`passUpOrDie(except_index)`** 
 Per le eccezioni SYSCALL ≥ 1, Program Trap e TLB, il comportamento del Nucleo dipende dalla presenza della Support Structure all’interno del pass up vector del processo. Se assente, il processo corrente e tutta la sua progenie vengono terminati. Se presente, il Nucleo salva lo stato dell'eccezione nella struttura ed esegue un'istruzione **`LDCXT`** per passare il controllo alla routine di gestione definita dal Livello di Supporto.
+
+---
+
+# Fase 3: Premesse
+Per scrivere il codice del livello di supporto abbiamo seguito lo stile di progettazione utilizzato anche nelle fasi precedenti cercando di mantenere una struttura del codice pulita dividendo le intestazioni `.h` dai file di codice `.c`.
+
+## Inizializzazione dei processi utente
+### Variabili globali del livello di supporto
+- `masterSemaphore` semaforo che gestisce l'accesso mutualmente esclusivo all'esecuzione del processo master (test) deve attendere in coda su di esso finché non termina la shell e libera la risorsa con la primitiva `V()`.
+- `shellSemaphore` semaforo che gestisce l'accesso mutualmente esclusivo ai programmi in esecuzione sulla shell. Quando un programma termina, rilascia la risorsa che torna alla shell che quindi riprende la sua esecuzione.
+- `flashMutex[UPROCMAX]` semaforo che gestisce lettura e scrittura su di un flash device per evitare che due processi scrivano sullo stesso device contemporaneamente. Per scrivere sul device `i` il processo deve prima invocare la primitva `P()` sul semaforo corrispondente.
+- `termReadMutex` semaforo che gestisce l'accesso in lettura sul terminale.
+- `termWriteMutex` semaforo che gestisce l'accesso in scrittura sul terminale.
+- `suppStruct_table[UPROCMAX]` sttura di supporto per ogni processo utente, utile per la gestione delle eccezioni di tipo `pagefault` o `generalexcept` e per la gestione della tabella delle pagine private.
+- `suppStructFree_h` lista di tutte le pagine di supporto libere, che verranno allocate e liberate dinamicamente come suggerito nelle specifiche di progetto.
+- `supportStructSem` semaforo per la gestione delle support struct libere: evita l'allocazione contemporanea da parte di due processi della stessa support struct.
+
+### **`initSupportStructs()`**
+Prende tutte le support struct definite all'interno della tabella, le inserisce all'interno della lista delle strutture di supporto libere e inizializza ad `1` il semaforo `supportStructSem` in modo tale da assicurare la possbilità ad un u-proc di allocare una struttura di supporto.
+
+### **`*allocSupportStruct()`**
+Richiede la possibilità di ottenere la struttura di supporto invocando la primitiva `P()` sul semaforo.
+Una volta ottenuta la risorsa, controlla che ci sia almeno un elemento all'interno della lista delle strutture libere, se non c'è restutisce `NULL`, altrimenti ottiene la struttura e la rimuove dalla lista delle libere evitando conflitti futuri.
+Una volta otttenuta la struttura di supporto rilascia il semaforo.
+
+### **`*freeSupportStruct(support_t *s)`**
+Mi servo del semaforo per evitare conflitti, ottenuta la risorsa, libero la struttura di supporto, inserendo con la primitiva `list_add_tail` all'interno della lista delle libere. Infine libero l'accesso alla risorsa condivisa.
+
+### **`*initDeviceMutex()`**
+Inizializzo i semafori per l'accesso ai flash device dando la possbilità di accesso. Inizializzati allo stesso modo anche i semafori di lettura e scrittura sul terminale (`val = 1`).
+
+### **`initUprocState(state_t *s, int asid)`**
+Prende in input 
+
+
+

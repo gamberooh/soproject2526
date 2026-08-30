@@ -19,7 +19,7 @@ void main() {
     int  i;
     int  found;
 
-    for (;;) { //ciclo infinito della shell, finche non riceve il comando "exit"
+    for (;;) {
         print(WRITETERMINAL, "$ ");
 
         status = SYSCALL(READTERMINAL, (int)&buf[0], 0, 0); //legge una riga di input dal terminale e la salva nel buffer buf. il valore di ritorno della syscall è il numero di caratteri letti, oppure un valore negativo che indica l'errore se la lettura è fallita. (int)&buf[0] è l'indirizzo del buffer dove salvare la riga letta dal terminale. 
