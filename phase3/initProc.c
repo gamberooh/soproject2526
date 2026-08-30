@@ -77,13 +77,13 @@ void initUprocSupport(support_t *supp, int asid) {
     supp->sup_exceptContext[GENERALEXCEPT].stackPtr = (memaddr)&(supp->sup_stackGen[499]);
 
     unsigned int TEXT_DATA = USERPGTBLSIZE - 1; // Area text & data
-    for (int i = 0; i < TEXT_DATA; i++) { //per ogni pagina della tabella delle pagine private del processo utente, tranne l'ultima che e' riservata allo stack, imposto il campo entryHI e entryLO della PTE. L'entryHI contiene l'indirizzo virtuale della pagina e l'ASID del processo, mentre l'entryLO contiene il flag DIRTYON per indicare che la pagina e' scrivibile.
-        supp->sup_privatePgTbl[i].pte_entryHI = (KUSEG + (i * PAGESIZE)) | (asid << ASIDSHIFT);// . L'indirizzo virtuale della pagina viene calcolato come KUSEG + i*PAGESIZE, dove KUSEG è l'indirizzo base dello spazio utente e PAGESIZE è la dimensione di una pagina. L'ASID viene shiftato a sinistra di ASIDSHIFT bit per essere posizionato correttamente nel campo entryHI.
-        supp->sup_privatePgTbl[i].pte_entryLO = DIRTYON;  // imposto il campo entryLO della tabella delle pagine private del processo utente, che contiene il flag DIRTYON per indicare che la pagina e' scrivibile. In questo modo, il processore sa che può scrivere su questa pagina senza generare un page fault.
+    for (int i = 0; i < TEXT_DATA; i++) { 
+        supp->sup_privatePgTbl[i].pte_entryHI = (KUSEG + (i * PAGESIZE)) | (asid << ASIDSHIFT);
+        supp->sup_privatePgTbl[i].pte_entryLO = DIRTYON;
     }
     // stack page
     unsigned int STACK_PAGE_IDX = USERPGTBLSIZE - 1;
-    supp->sup_privatePgTbl[STACK_PAGE_IDX].pte_entryHI = (USERSTACKTOP - PAGESIZE) | (asid << ASIDSHIFT); //userstacktop - pagesize = 0xBFFFF000, che è l'indirizzo virtuale della pagina di stack del processo utente. 
+    supp->sup_privatePgTbl[STACK_PAGE_IDX].pte_entryHI = (USERSTACKTOP - PAGESIZE) | (asid << ASIDSHIFT); //userstacktop - pagesize = 0xBFFFF000 
     supp->sup_privatePgTbl[STACK_PAGE_IDX].pte_entryLO = DIRTYON;
 }
 
@@ -92,9 +92,9 @@ void test(void) {
     state_t     shellState;
     support_t  *shellSupp;
 
-    initSupportStructs(); //inizializza la lista di support_t liberi
-    initDeviceMutex(); //inizializza i mutex dei dispositivi
-    initSwapStructs(); //inizializza le strutture per la gestione dello swap, impostando tutti i frame della swap area come liberi (0) e tutti i frame della RAM come liberi (0)
+    initSupportStructs(); 
+    initDeviceMutex(); 
+    initSwapStructs(); // frame swap pool & frame RAM = 0
 
     masterSemaphore = 0; //serve a far aspettare il processo master (test()) finche non termina la shell
     shellSemaphore  = 0; //serve a far aspettare la shell quando lancia un programma con essa(finche non termina il programma). quando il programma termina, viene fatta una V() sul semaforo della shell, che quindi riprende l'esecuzione

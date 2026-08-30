@@ -367,7 +367,25 @@ Mi servo del semaforo per evitare conflitti, ottenuta la risorsa, libero la stru
 Inizializzo i semafori per l'accesso ai flash device dando la possbilità di accesso. Inizializzati allo stesso modo anche i semafori di lettura e scrittura sul terminale (`val = 1`).
 
 ### **`initUprocState(state_t *s, int asid)`**
-Prende in input 
+Prende in input lo stato di un processo utente da inizializzare e il suo ASID e inizializza i campi dello stato del processo in modo tale che:
+- Pulisca il registro `cause` e i registri generali
+- Imposti il `pc` all'indirizzo di partenza del processo utente impostandolo a `UPROCSTARTADDR`.
+- Imposti lo stack pointer a `USERSTACKTOP`.
+- Abiliti gli interrutpt globali e rimanendo in user mode (MPP = 0).
+- Abiti tutti gli interrupt
+- Imposti il registro `entry_hi` in modo tale che tramite l'apposito shift, l' `ASID` in input finisca nell'area corretta.
 
+### **`initUprocSupport(support_t *supp, int asid)`**
+Prende in input la struttura di supporto ottenuta dal processo e la inizializza:
+- Imposta l'asid in input del processo utente come campo della struttura di supporto.
 
+- Configura i campi per la gestione di eccezioni di tipo `pagefault` e di tipo `generalexept`.  Ogni `context_t` contiene i registri stackPtr, status e pc che vengono caricati nel processore quando si verifica l'eccezione corrispondente.
 
+- Fa distinizione all'interno della tabella delle pagine di un proceddo tra text & data area e l'area dedicata allo stack. Per ogni pagina della tabella privata riservata a text & data del processo utente, imposto il campo `entryHI` e `entryLO` della PTE. 
+- Per **text & data**`entryHI` contiene l'indirizzo virtuale della pagina (`KUSEG + i*PAGESIZE`) e l'ASID del processo, mentre `entryLO` contiene il flag `DIRTYON` per indicare che la pagina e' scrivibile.
+- Per **stack** il VPN è settato staticamente a `USERSTACKTOP - PAGESIZE`
+
+### **`test()`**
+Il test è definito come master process e ha il compito di inizializzare le strutture di supporto, i sermafori dei device e le strutture che favoriscono il memory swap impsotando tutti i frame della swap pool come liberi e tutti i frame della RAM come liberi.
+
+[CONTINUA DA SEMAFORI...]
