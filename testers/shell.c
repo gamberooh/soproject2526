@@ -7,7 +7,16 @@
 #define NUMPROGS 7
 
 static char *progNames[NUMPROGS] = {"date", "echo", "fibEight", "fibEleven", "uname", "calc", "sl"};
-static int   progAsid[NUMPROGS]  = {2, 3, 4, 5, 6, 7, 8};
+static char *progNames[NUMPROGS] = {
+    "fibEight",
+    "echo",
+    "fibEleven",
+    "uname",
+    "date",
+    "sl",
+    "calc"
+};
+static int progAsid[NUMPROGS] = {2, 3, 4, 5, 6, 7, 8};
 
 static int streq(char *a, char *b);
 

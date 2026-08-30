@@ -386,186 +386,207 @@ Prende in input la struttura di supporto ottenuta dal processo e la inizializza:
 - Per **stack** il VPN è settato staticamente a `USERSTACKTOP - PAGESIZE`
 
 ### **`test()`**
-Il test è definito come master process e ha il compito di inizializzare le strutture di supporto, i sermafori dei device e le strutture che favoriscono il memory swap impsotando tutti i frame della swap pool come liberi e tutti i frame della RAM come liberi.
-- `masterSemaphore` viene bloccato in modo tale da mettere in waiting il processo di `test()` fino a quando non viene terminata l'esecuzione della `shell`.
-- `shellSemaphore` viene bloccato in modo tale da mettere in waiting il processo `shell` fino a che non viene eseguito terminata l'esecuzione di uno dei programmi di test.
-- Preparazione del processo `shell`:
-1. Viene allocata tramite la funzione `allocSupportStruct` una struttura di supporto per il processo shell.
-2. Inizializzo le la struttura di supporto della shell dandogli l'ASID che affidiamo alla `shell`.
-3. Inizializzo lo stato del processo `shell`
-4. Creo il processo `shell` con la relativa primitiva `CREATEPROCESS` dandogli in input anche lo stato della shell, la priorità minima e la sua struttura di supporto. Il sisitema operativo crea il processo e lo mette in coda di ready servendosi delle primitive livello kernel scritte nella fase 2.
-5. Invoco una `P()` sul semaforo `masterSemaphore` per cui il processo `test()` aspetta finché non termina la shell. Quando quest'ultima termina, viene fatta una `V()` sul semaforo `masterSemaphore`, che quindi riprende l'esecuzione del processo `test()`.
-6. Termina il processo master, che quindi non puo' piu' eseguire alcuna istruzione. Il sistema operativo libera tutte le risorse allocate al processo master e lo rimuove dalla coda di ready.
 
+Il test è definito come master process e ha il compito di inizializzare le strutture di supporto, i semafori dei device e le strutture che favoriscono il memory swap, impostando tutti i frame della swap pool e della RAM come liberi.
+
+- `masterSemaphore`: inizializzato a `0` per porre in attesa il processo `test()` fino al completamento della shell.
+- `shellSemaphore`: inizializzato a `0` per porre in attesa la shell durante l'esecuzione dei programmi lanciati da essa.
+- **Preparazione ed esecuzione del processo `shell`:**
+  1. Alloca una struttura di supporto tramite `allocSupportStruct()`.
+  2. Inizializza la struttura di supporto della shell tramite `initUprocSupport(shellSupp, 1)` assegnandole l'ASID 1.
+  3. Inizializza lo stato del processore per la shell tramite `initUprocState(&shellState, 1)`.
+  4. Crea il processo shell invocando la primitiva kernel `CREATEPROCESS`, impostando priorità minima (`PROCESS_PRIO_LOW`) e passando stato e struttura di supporto.
+  5. Esegue una `P()` su `masterSemaphore` bloccando il master fino alla terminazione della shell.
+  6. Quando la shell termina (svegliata tramite `V()` su `masterSemaphore`), il processo master termina definitivamente il sistema invocando `TERMPROCESS`.
 
-## Supporto alla memoria virtuale: vmSupport
+---
 
-### Strutture principali:
+# Fase 3: Supporto alla memoria virtuale (vmSupport.c)
 
-- `Swap pool`: Questa tabella tiene traccia di ogni frame della swap pool:
+## Strutture dati e variabili della Swap Pool
 
-- `sw_asid`: ASID del processo che usa un determinato frame.
+- `swapPoolTable[POOLSIZE]`: tabella che tiene traccia di ogni frame della swap pool:
+  - `sw_asid`: ASID del processo che occupa il frame (`NOPROC` se libero).
+  - `sw_pageNo`: numero di pagina virtuale associata al frame.
+  - `sw_pte`: puntatore alla PTE che descrive la pagina mappata nel frame.
+- `swapPoolSem`: semaforo mutex che protegge l'accesso concorrente alla swap pool, evitando corse critiche durante l'allocazione e sostituzione dei frame.
+- `nextVictimFrame`: indice per la politica di rimpiazzo Round-Robin/FIFO, utilizzato per selezionare il frame vittima da sostituire quando la swap pool è satura.
 
-- `sw_pageNo`: numero di pagina virtuale associata ad un determinato frame.
+## Funzioni per la gestione della memoria virtuale
 
-- `sw_pte`: puntatore alla PTE che descrive una una determinata page
+### `initSwapStructs()`
 
-- `swapPoolSem`: è il mutex che protegge l’accesso alla swap pool, in modo tale da evitare che più processi possano modificare la stessa struttura in modo concorrente.
-- `nextVictimFrame` Round-robin victim (ottimizzato): Questo puntatore implementa una politica FIFO/round-robin per scegliere il frame da sostituire quando la swap pool è piena.
+Inizializza le strutture dati della swap pool:
+- Imposta tutti i frame della `swapPoolTable` come liberi (`sw_asid = NOPROC`).
+- Inizializza ad `1` il semaforo `swapPoolSem` per consentire l'accesso in mutua esclusione.
+- Azzera il puntatore per la scelta della vittima (`nextVictimFrame = 0`).
 
-Funzioni principali:
+### `freeUprocFrames(asid)`
 
-- initSwapStruct(): Inizializza la swap pool:
+Libera tutti i frame della swap pool occupati dal processo specificato da `asid`:
+1. Acquisisce il mutex `swapPoolSem` invocando la primitiva `P()`.
+2. Scorre l'intera `swapPoolTable`: per ogni frame associato all'ASID specificato, ne ripristina lo stato a libero (`sw_asid = NOPROC`).
+3. Rilascia il mutex `swapPoolSem` invocando la primitiva `V()`.
 
-mette tutti i frame come liberi,
+### `pickFrame()`
 
-imposta il semaforo a 1,
+Seleziona un frame disponibile all'interno della swap pool:
+- Se è presente almeno un frame libero (`sw_asid == NOPROC`), lo restituisce immediatamente.
+- Se tutti i frame sono occupati, sceglie il frame puntato da `nextVictimFrame` secondo la politica Round-Robin e incrementa circolarmente l'indice (`(nextVictimFrame + 1) % POOLSIZE`).
 
-azzera il puntatore del victim.
+### `flashOperation(asid, blockNo, frameAddr, writeOp)`
 
-- freeUprocFrames(int Asid): Libera tutti i frame della swap pool usati da un certo ASID. Per prima cosa acquisisce il mutex swapPoolSem, scorre la tabella: se trova frame appartenenti all’ASID richiesto, li marca come liberi, infine rilascia il semaforo.
-- pickFrame() (ottimizzato): sceglie un frame disponibile per la nuova pagina: se c’è un frame libero, lo usa subito;
+Esegue una transazione di lettura o scrittura a blocchi (4KB) con il flash device associato all'ASID del processo:
+- Calcola l'indice del device flash (`devNo = asid - 1`).
+- Recupera il registro del dispositivo tramite `FLASHDEVADDR(devNo)`.
+- Acquisisce la mutua esclusione sul dispositivo tramite `P(flashMutex[devNo])`.
+- Scrive l'indirizzo fisico `frameAddr` nel registro `data0` e il comando (`FLASHREAD` o `FLASHWRITE`) con il blocco (`blockNo << 8`) nel registro di comando.
+- Invoca la syscall `DOIO` per attendere il completamento dell'operazione.
+- Rilascia il semaforo `flashMutex[devNo]` con `V()` e restituisce lo stato dell'operazione.
 
-altrimenti usa il meccanismo round-robin per scegliere un frame da sostituire.
+### `tlbUpdate(entryHI, entryLO)`
 
-- flashOperation(int ASID, int blockNo, ,memaddr frameAddr, int writeOp): Questa funzione esegue una lettura/scrittura su un flash device associato all’ASID dell’U-proc.
+Aggiorna in modo mirato una singola riga all'interno della TLB:
+- Cerca nella TLB l'indirizzo virtuale contenuto in `entryHI` tramite l'istruzione `TLBP()`.
+- Se la riga è presente (`Index.P == 0`):
+  - Carica i registri `EntryHI` e `EntryLO` con i nuovi valori (o con il flag `VALIDON` disattivato in caso di invalidazione).
+  - Scrive la voce nella specifica riga puntata dal registro Index tramite `TLBWI()`. In questo modo viene aggiornata una sola riga senza alterare le restanti entry della TLB.
 
-Funzionamento:
+### `pageIndexFromVPN(vpn)`
 
-calcola il device flash corretto,
+Converte il Virtual Page Number (`vpn`) nel corrispondente indice all'interno della Page Table privata del processo:
+- Se il `vpn` appartiene all'ultima pagina dell'area utente (`USERSTACKTOP - PAGESIZE`, ovvero `0xBFFFF`), restituisce l'ultimo slot riservato allo stack: `USERPGTBLSIZE - 1`.
+- Altrimenti calcola l'indice relativo sottraendo il VPN base dell'area utente: `vpn - (KUSEG >> VPNSHIFT)`.
 
-- prende il registro del device tramite FLASHDEVADDR(devNo),
-- scrive l’indirizzo del frame in data0,
-- invoca DOIO con il comando di lettura/scrittura,
-- usa un semaforo flashMutex[devNo] per la mutua esclusione.
-- tlbUpdate(entryHi, entryLO) ottimizzato: questa funzione aggiorna la TLB in modo mirato.
+### `pager()`
 
-Funzionamento:
+Gestore delle eccezioni di Page Fault (`PGFAULTEXCEPT`):
+1. Recupera la Support Structure del processo corrente tramite `GETSUPPORTPTR`.
+2. Se l'eccezione è causata da un tentativo di scrittura su pagina in sola lettura (`EXC_RTLBMOD`), la tratta come Program Trap chiamando `supportProgramTrapHandler()`.
+3. Acquisisce il mutex `swapPoolSem` ed estrae VPN e indice di pagina `p` dalla causa dell'eccezione.
+4. Seleziona un frame nella swap pool tramite `pickFrame()` e ne calcola l'indirizzo fisico in memoria (`SWAPPOOLSTART + frame * PAGESIZE`).
+5. **Gestione del frame occupato (rimpiazzo vittima):**
+   - Identifica il processo vittima e recupera la relativa PTE.
+   - Disabilita gli interrupt globali per garantire atomicità, invalida la PTE della vittima azzerando `VALIDON` e aggiorna la TLB con `tlbUpdate()`.
+   - Riabilita gli interrupt e salva la pagina vittima sul rispettivo flash device (`flashOperation(..., FLASHWRITE)`).
+6. **Caricamento della nuova pagina:**
+   - Legge la pagina richiesta dal flash device del processo corrente nel frame selezionato (`flashOperation(..., FLASHREAD)`).
+   - Aggiorna i metadati della `swapPoolTable` associando il frame al nuovo ASID, pagina e PTE.
+   - Aggiorna la PTE del processo impostando l'indirizzo fisico e attivando i flag `VALIDON` e `DIRTYON`.
+   - Aggiorna la TLB tramite `tlbUpdate()`.
+7. Rilascia il mutex `swapPoolSem` e ripristina lo stato del processo tramite `LDST` per proseguire l'esecuzione.
 
-cerco nella TLB (usando TLBP()) la pagina con l’entryHI che ho passato alla funzione, se ce (Index.P=0) preparo il nuovo valore da scrivere (o il frame fisico nuovo appena caricato, oppure lo stesso valore ma con il bit “Valid” spento (per invalidare la pagina della vittima). Infine con TLBWI() scrivo ENTRYHI+ENTRYLO nella riga che INDEX sta ancora puntando da quando TLBP() l’ha trovata. Di conseguenza aggiorno solo una riga, le altre 15 non vengono toccate (a differenza di TLBCR() che le avrebbe modificate tutte quante).
+### `uTLB_RefillHandler()`
 
-- pageIndexFromVPN(int vpn): converte il VPN in un indice della page table privata del processo.
-- IL PAGER() (funzione principale):
+Routine a livello kernel per la gestione rapida delle eccezioni di TLB-Miss:
+1. Recupera lo stato salvato del processore tramite `GET_EXCEPTION_STATE_PTR(0)`.
+2. Estrae il VPN dal registro `entry_hi` tramite lo shift `>> VPNSHIFT`.
+3. Calcola l'indice della pagina nella tabella privata del processo corrente.
+4. Recupera la PTE corrispondente da `current_process->p_supportStruct->sup_privatePgTbl[idx]`.
+5. Carica `pte_entryHI` e `pte_entryLO` nei registri `EntryHI` ed `EntryLO` tramite `setENTRYHI()` e `setENTRYLO()`.
+6. Scrive la voce nella TLB tramite `TLBWR()`.
+7. Ripristina lo stato del processo con `LDST()`.
 
-ottengo la support structure del processo che ha generato il page fault.
+> **Nota:** La routine non verifica la presenza fisica della pagina in memoria RAM, ma trascrive ciecamente la PTE nella TLB. Se la pagina non è ancora valida (`VALIDON` spento), l'accesso fallirà subito dopo sollevando un'eccezione di TLB-Invalid, che verrà instradata e gestita dal `pager()`.
 
-Recupero lo stato della CPU al momento dell’eccezione, già salvato da passUpOrDie() prima che il pager venisse chiamato, per capire che tipo di errore si è verificato. Se si tenta di scrivere in una pagina segnata come read-only (EXC_RTLBMOD), il problema è trattato come trap di supporto.
+---
 
-Prendo il semaforo della swap pool poi ricavo il vpn e il relativo indice p.
+# Fase 3: Gestione System Call e Traps (sysSupport.c)
 
-Scelgo un frame della swap pool dove caricare (pickframe()) e calcolo l’indirizzo fisico del frame scelto nella swap pool, che si trova a partire dall’indirizzo SWAPPOOLSTART e ha dimensione PAGESIZE.
+## Macro e costanti ausiliarie
 
-Se il frame selezionato è già occupato:
+- `TERMDEVADDR(devNo)`: macro che calcola l'indirizzo base dei registri hardware del terminale specificato.
 
-- si identifica il processo vittima;
-- si recupera la PTE che lo descrive;
-- si invalida la PTE della vittima;
-- si aggiorna la TLB mirata;
-- si scrive la pagina vittima sul flash device
+## Funzioni del livello di supporto
 
-la pagina vecchia viene salvata e la swap pool viene “pulita” dal suo contenuto vecchio. (operazione atomica quindi disabilito gli interrupt: setSTATUS(getSTATUS() & ~MSTATUS_MIE_MASK).
+### `terminateUproc(supp)`
 
-Li riabilito subito prima della flashOperation: setSTATUS(getSTATUS() | MSTATUS_MIE_MASK)
+Termina in modo ordinato il processo utente specificato:
+1. Libera tutti i frame occupati dal processo nella Swap Pool tramite `freeUprocFrames()`.
+2. Restituisce la Support Structure alla lista libera tramite `freeSupportStruct()`.
+3. Disabilita temporaneamente gli interrupt ed invalida nella TLB tutte le entry valide della Page Table del processo tramite `tlbUpdate()`, evitando che un futuro processo con lo stesso ASID trovi traduzioni obsolete.
+4. Sincronizzazione:
+   - Se il processo che termina è la Shell (`ASID == 1`), invoca `V(masterSemaphore)` per risvegliare il master process (`test()`).
+   - Se è un programma utente (`ASID > 1`), invoca `V(shellSemaphore)` per risvegliare la Shell.
+5. Chiama la syscall kernel `TERMPROCESS` per terminare definitivamente il processo.
 
-status = flashOperation(supp->sup_asid, p, frameAddr, FALSE); la pagina Corretta viene letta dal flash e caricata nel frame scelto.
+### `supportProgramTrapHandler(supp)`
 
-swapPoolTable[frame].sw_asid = supp->sup_asid;
+Gestisce le eccezioni di tipo Program Trap generate in User Mode delegando la terminazione pulita a `terminateUproc()`.
 
-swapPoolTable[frame].sw_pageNo = p;
+### `isValidUserAddr(addr)`
 
-swapPoolTable[frame].sw_pte = &supp->sup_privatePgTbl[p];
+Funzione di validazione degli indirizzi di memoria passati dai processi utente: verifica che l'indirizzo ricada all'interno dello spazio utente consentito (`KUSEG <= addr < USERSTACKTOP`).
 
-aggiorno la swap pool (il frame viene associato al nuovo processo e alla nuova pagina).
+### `supportSyscallHandler(supp)`
 
-supp->sup_privatePgTbl[p].pte_entryLO = (frameAddr & 0xFFFFF000) | DIRTYON | VALIDON
+Gestore delle chiamate di sistema a livello di supporto:
+- Incrementa il Program Counter `pc_epc += 4` per evitare la riesecuzione a vuoto della syscall.
+- Smista la richiesta esaminando il codice syscall presente nel registro `a0`:
+  - `TERMINATE` (`SYS2`): invoca `terminateUproc()`.
+  - `WRITETERMINAL` (`SYS4`): invoca `sysWriteTerminal()`.
+  - `READTERMINAL` (`SYS5`): invoca `sysReadTerminal()`.
+  - `EXECUTE` (`SYS6`): invoca `sysExecute()`.
+  - Codice non valido: termina il processo per sicurezza con `terminateUproc()`.
+- Se la syscall non termina il processo o non ricarica autonomamente lo stato, esegue `LDST` per proseguire l'esecuzione.
 
-tlbUpdate(supp->sup_privatePgTbl[p].pte_entryHI, supp->sup_privatePgTbl[p].pte_entryLO);
+### `supportGeneralExceptionHandler()`
 
-si aggiorna la PTE del processo con l’inidirizzo fisico corretto, attivo i bit di validità e dirty e aggiorno la TLB.
+Punto di ingresso per tutte le eccezioni generali del Support Level:
+- Recupera il puntatore alla Support Structure del processo corrente tramite `GETSUPPORTPTR`.
+- Esamina il codice dell'eccezione nel registro `cause`:
+  - Se generata da una syscall (`EXC_ECU` o `EXC_ECM`), passa il controllo a `supportSyscallHandler()`.
+  - Altrimenti la tratta come errore di programma invocando `supportProgramTrapHandler()`.
 
-SYSCALL(VERHOGEN, (int)&swapPoolSem, 0, 0) rilascio il semaforo della swap pool
+### `sysWriteTerminal(supp)`
 
-LDST(excState) ripristino lo stato del processo interrotto e faccio proseguire l’esecuzione normalmente.
+Implementa la system call `SYS4` (scrittura su terminale):
+1. Valida la lunghezza della stringa (`0 <= len <= MAXSTRLENG`) e l'intervallo di indirizzi del buffer utente.
+2. Acquisisce la mutua esclusione sul terminale in scrittura tramite `P(termWriteMutex)`.
+3. Trasmette i caratteri uno alla volta invocando `DOIO` con il comando `TRANSMITCHAR` sul registro `transm_command`.
+4. Rilascia il mutex tramite `V(termWriteMutex)`.
+5. Ritorna nel registro `a0` il numero di caratteri correttamente trasmessi oppure il codice di errore negativo.
 
-**Funzione uTLB_RefillHandler():**
+### `sysReadTerminal(supp)`
 
-Il suo compito è:
+Implementa la system call `SYS5` (lettura da terminale):
+1. Valida l'indirizzo del buffer di destinazione nello spazio utente.
+2. Acquisisce la mutua esclusione sul terminale in lettura tramite `P(termReadMutex)`.
+3. Legge un carattere alla volta invocando `DOIO` con il comando `RECEIVECHAR` sul registro `recv_command`, fermandosi al carattere di newline (`\n`), in caso di errore o al raggiungimento di `MAXSTRLENG`.
+4. Rilascia il mutex tramite `V(termReadMutex)`.
+5. Ritorna nel registro `a0` il numero di caratteri letti oppure il codice di errore negativo.
 
-- rilevare quale pagina virtuale ha causato il miss nella TLB,
-- trovare la corrispondente entry nella page table del processo corrente,
-- caricare quella entry in ENTRYHI e ENTRYLO,
-- scrivere la voce nella TLB,
-- riprendere l’esecuzione del processo.
+### `sysExecute(supp)`
 
-GET_EXCEPTION_STATE_PTR(0) è una macro che calcola l’indirizzo di memoria dove il BIOS ha scritto lo stato salvato della CPU al momento dell’eccezione.
+Implementa la system call `SYS6` (esecuzione di programmi):
+- Verifica che il processo chiamante sia la Shell (`ASID == 1`); in caso contrario termina il processo.
+- Alloca una nuova Support Structure tramite `allocSupportStruct()`. Se le strutture sono esaurite, ritorna alla Shell senza abortire l'intero sistema.
+- Inizializza lo stato del nuovo processo (`initUprocState`) e la sua Support Structure (`initUprocSupport`) con l'ASID richiesto.
+- Crea il nuovo processo utente invocando la syscall kernel `CREATEPROCESS`.
+- Mette la Shell in attesa bloccante invocando `P(shellSemaphore)` fino alla terminazione del programma figlio.
+- Al risveglio, ricarica lo stato della Shell tramite `LDST`.
 
-**unsigned int vpn = savedState->entry_hi >> VPNSHIFT;**
+---
 
-Qui si calcola il VPN
+# Fase 3: Programmi Tester e Shell (testers/)
 
-entry_hi contiene l’indirizzo virtuale che ha causato il miss.
+## Shell di sistema (`testers/shell.c`)
 
-Con lo shift a destra di VPNSHIFT si tolgo i bit dell’offset all’interno della pagina e rimane solo il numero della pagina. Quindi: indirizzo virtuale= pagina+offset. Faccio lo shift e ottengo il vpn.
+La Shell rappresenta l'interfaccia a riga di comando del sistema operativo (eseguita come processo con `ASID 1`):
+- Mantiene l'elenco dei programmi disponibili (`date`, `echo`, `fibEight`, `fibEleven`, `uname`, `calc`, `sl`) associati ai rispettivi identificatori ASID.
+- Esegue un ciclo continuo con il seguente flusso:
+  1. Stampa il prompt `$ ` sul terminale tramite `WRITETERMINAL`.
+  2. Legge la riga inserita dall'utente tramite `READTERMINAL`. In caso di errore stampa `Read error`.
+  3. Rimuove il carattere newline finale `\n` e inserisce il terminatore `EOS`.
+  4. Se la riga è vuota, riesegue il ciclo.
+  5. Se il comando inserito è `exit`, interrompe il ciclo e termina la shell con `TERMINATE`.
+  6. Confronta la stringa letta con i comandi supportati tramite `streq()`: se trova una corrispondenza, invoca la syscall `EXECUTE` (`SYS6`) passando l'ASID associato.
+  7. Se il comando non è riconosciuto, stampa a video `Unknown command`.
+- Termina l'esecuzione invocando `SYS2` (`TERMINATE`).
 
-- Calcolo l’indice della page table (idx) partendo dal vpn: se vpn è l’ultima pagina della zona utente (0xBFFFF), usa l’ultimo slot disponibile:
-    - USERPGTBLSIZE - 1
-- altrimenti:
-    - vpn - (KUSEG >> VPNSHIFT)
+### `streq(char *a, char *b)`
 
-dove KUSEG>>VPNSHIFT corrisponde al numero della prima pagina della zona utente
-
-facendo vpn- KUSEG>>VPNSHIFT ottengo l’indice relativo dentro la tabella del processo
-
-pteEntry_t*pte =&current_process->p_supportStruct->sup_privatePgTbl[idx]
-
-la entry si prende dalla page table del processo puntato del processo puntato da current_process
-
-setENTRYHI(pte->pte_entryHI) e  setENTRYLO(pte->pte_entryLO):
-
-carico nei registri EntryHi e EntryLO i campi pte_entryHI e pte_entryLO
-
-TLBWR(): scrive la nuova entry nella TLB usando i valori caricati in ENTRYHI e ENTRYLO
-
-Infine con LDST ripristino lo stato del processo salvato prima dell’eccezione.
-
-NOTA : questa funzione non verifica se la pagina è effettivamente presenta in RAM(con bit Validation), ma carica in TLB qualsiasi cosa trovi nella page table, valida o no. Se la pagina non è ancora caricata, l’istruzione fallisce di nuovo subito dopo , ma questa volta con un’eccezione del tipo TLB_Invalid, che viene gestita separatamente dal pager().
-
-File sysSupport.c
-
-Macro: TermDEVADDR(devNo): calcola l’indirizzo dei registri del terminale numero devNo
-
-funzioni principale:
-
-1- terminateUproc(support_t *supp): termina in modo ordinato uno U-proc. libera tutti i frame dela Swap che occupava, resitiuisce la sua support structure al pool libero, poi invalida in TLB tutte le entry ancora valide della sua page table, cosi il suo ASID viene riassegnato subito a un nuovo processo, non resta nessuna traduzione vecchia agganciata in TLB. infine sveglia che stava aspettando e chiama SYSCALL(TERMPROCESS…)
-
-2-supporProgramTrapHamdler(support_t *supp):gestisce un program trap quindi chiama terminateUproc
-
-3-isValidUserAdrr(memaddr addr): verifica che un indirizzo passato da un U-proc sia dentro lo spazio utente per evitare che un processo possa leggere/scrivere al sistema inidirizzi arbitrari.
-
-4- supportSyscallHandler(support_t *supp) : avanza il PC di 4 , legge il numero di syscall da reg_a0, e smista a seconda del caso: TERMINATE → terminateUproc, WRITETERMINAL/READTERMINAL → le rispettive funzioni, EXECUTE → sysExecute. Un codice non riconosciuto termina il processo per sicurezza.
-5-  supportGeneralExceptionHandler(void):  recupera la Support Structure del processo che ha generato l'eccezione, guarda il registro cause, e decide se è una syscall (va a supportSyscallHandler) o un errore di programma (va a supportProgramTrapHandler).
-6  sysWriteTerminal(support_t *supp): SYS4: scrive una stringa sul terminale, un carattere alla volta, sotto mutua esclusione (termWriteMutex). Prima controlla che lunghezza e indirizzo del buffer siano validi (altrimenti termina il processo). Il valore di ritorno è il numero di caratteri scritti, o un errore negativo.
-7  sysReadTerminal(support_t *supp) SYS5: legge una riga dal terminale, un carattere alla volta, sotto mutua esclusione (termReadMutex), fermandosi a capolinea o dopo MAXSTRLENG caratteri. Stesso schema di ritorno di sysWriteTerminal.
-8  sysExecute(support_t *supp) SYS6: solo la shell (ASID 1) può chiamarla. Alloca una nuova Support Structure per il programma da lanciare (se il pool è esaurito, non crasha: torna semplicemente alla shell senza lanciare nulla), inizializza stato e Support Structure del nuovo processo, lo crea con CREATEPROCESS, e mette la shell in attesa (P(shellSemaphore)) finché quel processo non termina.
-
-Shell:
-la shell tiene:
-il nome del comando
-l’ASID del processo che deve eseguire quel comando
-entro in un ciclo dove la shell resta in esecuzione sempre, finché non riceve il comando exit.
-Stampa il prompt $ per scrivere il comando accanto.
-Legge la riga dal terminale e la mette in buf.
-Se la lettura va male, stampa un messaggio di errore e continua il ciclo della shell.
-se l’ultima cosa letta è \n, la toglie e mette EOS
-se l’utente preme solo invio, la shell non fa nulla.
-se il comando è exit, esco dal ciclo e termina.
-Successivamente la shell confronta il comando inserito con i nomi noti: date, echo, calc ecc…
-Se lo trova, esegue il programma corrispondente.
-se il comando non esiste, stampa Unkown command.
-quando l’utente preme exit, esce e la shell si chiude.
-
-
-La funione streq: 
-Confronta 2 stringhe carattere per carattere, senza consentire che una stringa sia “prefisso” dell’altra senza terminatore.
-
-
+Funzione di confronto tra stringhe:
+- Itera carattere per carattere finché entrambe le stringhe non raggiungono `EOS`.
+- Ritorna `1` se le stringhe sono identiche, `0` altrimenti.
+- Garantisce che una stringa non sia considerata uguale se è solo prefisso dell'altra.

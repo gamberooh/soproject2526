@@ -12,7 +12,7 @@
         },
         "flash1": {
             "enabled": true,
-            "file": "testers/date.uriscv"
+            "file": "testers/fibEight.uriscv"
         },
         "flash2": {
             "enabled": true,
@@ -20,23 +20,23 @@
         },
         "flash3": {
             "enabled": true,
-            "file": "testers/fibEight.uriscv"
+            "file": "testers/fibEleven.uriscv"
         },
         "flash4": {
             "enabled": true,
-            "file": "testers/fibEleven.uriscv"
+            "file": "testers/uname.uriscv"
         },
         "flash5": {
             "enabled": true,
-            "file": "testers/uname.uriscv"
+            "file": "testers/date.uriscv"
         },
         "flash6": {
             "enabled": true,
-            "file": "testers/calc.uriscv"
+            "file": "testers/sl.uriscv"
         },
         "flash7": {
-            "enabled": true,
-            "file": "testers/sl.uriscv"
+            "enabled": false,
+            "file": "testers/calc.uriscv"
         },
         "terminal0": {
             "enabled": true,
