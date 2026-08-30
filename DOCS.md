@@ -573,7 +573,7 @@ Implementa la system call `SYS6` (esecuzione di programmi):
 ## Shell di sistema (`testers/shell.c`)
 
 La Shell rappresenta l'interfaccia a riga di comando del sistema operativo (eseguita come processo con `ASID 1`):
-- Mantiene l'elenco dei programmi disponibili (`date`, `echo`, `fibEight`, `fibEleven`, `uname`, `calc`, `sl`) associati ai rispettivi identificatori ASID.
+- Mantiene l'elenco dei programmi disponibili (`fibEight`, `echo`, `fibEleven`, `uname`, `date`, `sl`, `calc`) associati ai rispettivi identificatori ASID.
 - Esegue un ciclo continuo con il seguente flusso:
   1. Stampa il prompt `$ ` sul terminale tramite `WRITETERMINAL`.
   2. Legge la riga inserita dall'utente tramite `READTERMINAL`. In caso di errore stampa `Read error`.

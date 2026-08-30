@@ -15,6 +15,7 @@ static char *progNames[NUMPROGS] = {
     "sl",
     "calc"
 };
+
 static int progAsid[NUMPROGS] = {2, 3, 4, 5, 6, 7, 8};
 
 static int streq(char *a, char *b);
