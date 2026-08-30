@@ -4,11 +4,12 @@
 #include <uriscv/liburiscv.h>
 #include <uriscv/cpu.h>
 #include <uriscv/types.h>
+extern char _end;
 
 /* Indirizzo di partenza della Swap Pool: subito dopo le prime OSFRAMES frame di RAM,
  * stimate sufficienti per codice OS + stack di test (sez. 4.1 delle specifiche). */
-#define SWAPPOOLSTART (RAMSTART + (OSFRAMES * PAGESIZE))
-
+//#define SWAPPOOLSTART (RAMSTART + (OSFRAMES * PAGESIZE))
+#define SWAPPOOLSTART (((memaddr)&_end+PAGESIZE-1) & ~(PAGESIZE-1)) 
 /* Indirizzo del device register di un flash device (stessa formula di phase2/interrupts.c
  * per IntlineNo=4, senza toccare quel file: START_DEVREG + (IntlineNo-3)*0x80 + devNo*0x10). */
 //MACRO SOLO PER I FLASH DEVICE, NON PER TUTTI I DEVICE, PER QUESTO NON CE intline-3. 0x80 mi serve per saltare direttamente alla zona dei flash device, che sono 8 e partono da IntlineNo=4. Quindi IntlineNo-3 = 1, e 1*0x80 = 0x80. Poi aggiungo devNo*0x10 per saltare al registro del flash device corrispondente all'ASID dell'U-proc.
