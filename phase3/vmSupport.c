@@ -4,10 +4,12 @@
 #include <uriscv/liburiscv.h>
 #include <uriscv/cpu.h>
 #include <uriscv/types.h>
+extern char _end;
 
-/* Indirizzo di partenza della Swap Pool: subito dopo le prime OSFRAMES frame di RAM,
- * stimate sufficienti per codice OS + stack di test */
-#define SWAPPOOLSTART (RAMSTART + (OSFRAMES * PAGESIZE))
+/* Indirizzo di partenza della Swap Pool*/
+
+//#define SWAPPOOLSTART (RAMSTART + (OSFRAMES * PAGESIZE))
+#define SWAPPOOLSTART (((memaddr)&_end+PAGESIZE-1) & ~(PAGESIZE-1)) 
 
 /* Indirizzo del device register di un flash device (stessa formula di phase2/interrupts.c
  * per IntlineNo=4, senza toccare quel file: START_DEVREG + (IntlineNo-3)*0x80 + devNo*0x10). */
