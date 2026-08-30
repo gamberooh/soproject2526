@@ -6,7 +6,6 @@
 #define MAXLINE  128
 #define NUMPROGS 7
 
-static char *progNames[NUMPROGS] = {"date", "echo", "fibEight", "fibEleven", "uname", "calc", "sl"};
 static char *progNames[NUMPROGS] = {
     "fibEight",
     "echo",
