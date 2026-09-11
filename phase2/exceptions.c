@@ -405,7 +405,7 @@ void passUpOrDie(int except_index)
         unsigned int sp = current_process->p_supportStruct->sup_exceptContext[except_index].stackPtr;
         unsigned int status = current_process->p_supportStruct->sup_exceptContext[except_index].status;
         unsigned int pc = current_process->p_supportStruct->sup_exceptContext[except_index].pc;
-        LDCXT(sp, status, pc);
+        LDCXT(sp, status, pc); // context switch
     }
 }
 

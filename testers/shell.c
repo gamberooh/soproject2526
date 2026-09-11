@@ -16,7 +16,15 @@ static char *progNames[NUMPROGS] = {
     "calc"
 };
 
-static int progAsid[NUMPROGS] = {2, 3, 4, 5, 6, 7, 8};
+static int progAsid[NUMPROGS] = {
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+};
 
 static int streq(char *a, char *b);
 
@@ -48,11 +56,10 @@ void main() {
 
         /* cerca ed esegue il comando */
         found = 0;
-        for (i = 0; i < NUMPROGS; i++) {
+        for (i = 0; i < NUMPROGS && !found; i++) {
             if (streq(buf, progNames[i])) {
                 found = 1;
                 SYSCALL(EXECUTE, progAsid[i], 0, 0);
-                break;
             }
         }
 
