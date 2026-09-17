@@ -22,4 +22,4 @@ Per la revisione e debug abbiamo lavorato tutti assieme, concordando sulla modul
 # Fase 3
 Per la fase 3 abbiamo sviluppato assieme le funzioni di supporto alla virtualizazzione e alle syscall livello utente, shell e programmi di test.
 
-
+In seguito alle 3 fasi il progetto è stato valutato 28/30
