@@ -1,5 +1,5 @@
 # SO Project AA 2025/2026
-Progetto finale del corso di Sitemi Operativi del secondo anno del corso di Informatica di UniBo che punta ad implementare in tre diverse fasi un sistema operativo virtualizzato tale PandOssh.
+Progetto finale del corso di Sitemi Operativi del secondo anno del corso di Informatica di UniBo che punta ad implementare in tre diverse fasi un sistema operativo virtualizzato tale PandOssh che esegue su di un emulatore uRiscv del progetto https://github.com/virtualsquare/uriscv
 
 ## Authors
  - Davide Gamberini
@@ -21,5 +21,7 @@ Per la revisione e debug abbiamo lavorato tutti assieme, concordando sulla modul
 
 # Fase 3
 Per la fase 3 abbiamo sviluppato assieme le funzioni di supporto alla virtualizazzione e alle syscall livello utente, shell e programmi di test.
+
+La parte puramente di codifica è stata valutata 28/30.
 
 In seguito alle 3 fasi il progetto è stato valutato 28/30
